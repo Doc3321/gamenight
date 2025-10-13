@@ -208,7 +208,7 @@ export default function Home() {
                 </Button>
                 <Button
                   onClick={() => setAppMode('online')}
-                  variant={appMode === 'online' ? 'default' : 'outline'}
+                  variant={(appMode as AppMode) === 'online' ? 'default' : 'outline'}
                   className="flex-1"
                 >
                   אונליין
