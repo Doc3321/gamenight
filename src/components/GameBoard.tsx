@@ -12,7 +12,6 @@ interface GameBoardProps {
 }
 
 export default function GameBoard({ game, onReset }: GameBoardProps) {
-  const [currentChoices, setCurrentChoices] = useState<string[]>([]);
   const [isSpinning, setIsSpinning] = useState(false);
   const [gameState, setGameState] = useState(game.getState());
   const [showResult, setShowResult] = useState(false);
@@ -27,7 +26,6 @@ export default function GameBoard({ game, onReset }: GameBoardProps) {
     setTimeout(() => {
       const result = game.spin();
       if (result) {
-        setCurrentChoices(result.choices);
         setLastResult(result);
         setGameState(game.getState());
         setIsSpinning(false);
@@ -51,7 +49,6 @@ export default function GameBoard({ game, onReset }: GameBoardProps) {
 
   const handleNextSpin = () => {
     setShowResult(false);
-    setCurrentChoices([]);
     
     // If this was the last spin, complete the game
     if (gameState.currentSpin >= gameState.totalSpins) {
@@ -66,7 +63,6 @@ export default function GameBoard({ game, onReset }: GameBoardProps) {
 
   const handleReset = () => {
     game.reset();
-    setCurrentChoices([]);
     setShowResult(false);
     setLastResult(null);
     setGameState(game.getState());

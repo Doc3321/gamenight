@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { WordGame } from '@/lib/gameLogic';
-import { wordTopics, WordTopic } from '@/data/wordTopics';
+import { wordTopics } from '@/data/wordTopics';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -44,7 +44,6 @@ export default function Home() {
   // Online game state
   const [room, setRoom] = useState<GameRoom | null>(null);
   const [currentPlayerId, setCurrentPlayerId] = useState<string>('');
-  const [playerName, setPlayerName] = useState<string>('');
 
   const startNewGame = (gameMode: GameMode = 'similar-word') => {
     const topic = wordTopics.find(t => t.id === selectedTopic);
@@ -79,7 +78,6 @@ export default function Home() {
       if (data.room) {
         setRoom(data.room);
         setCurrentPlayerId(data.room.hostId);
-        setPlayerName(hostName);
         setGameStarted(true);
       }
     } catch (error) {
@@ -103,7 +101,6 @@ export default function Home() {
       if (data.room) {
         setRoom(data.room);
         setCurrentPlayerId(data.room.players.find((p: Player) => p.name === playerName)?.id || '');
-        setPlayerName(playerName);
         setGameStarted(true);
       }
     } catch (error) {
@@ -139,7 +136,6 @@ export default function Home() {
   const leaveRoom = () => {
     setRoom(null);
     setCurrentPlayerId('');
-    setPlayerName('');
     setGameStarted(false);
   };
 

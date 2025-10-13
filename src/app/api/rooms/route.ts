@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     const room = roomManager.createRoom(hostId, hostName);
     
     return NextResponse.json({ room });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to create room' }, { status: 500 });
   }
 }
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({ room });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to get room' }, { status: 500 });
   }
 }

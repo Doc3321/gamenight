@@ -27,7 +27,7 @@ export default function JoinRoom({ onJoinRoom, onCreateRoom }: JoinRoomProps) {
     setIsJoining(true);
     try {
       await onJoinRoom(roomId.trim().toUpperCase(), playerName.trim());
-    } catch (error) {
+    } catch {
       toast.error('שגיאה בהצטרפות לחדר');
     } finally {
       setIsJoining(false);
@@ -43,7 +43,7 @@ export default function JoinRoom({ onJoinRoom, onCreateRoom }: JoinRoomProps) {
     setIsCreating(true);
     try {
       await onCreateRoom(playerName.trim());
-    } catch (error) {
+    } catch {
       toast.error('שגיאה ביצירת חדר');
     } finally {
       setIsCreating(false);

@@ -1,3 +1,5 @@
+import { wordTopics } from '@/data/wordTopics';
+
 export interface Player {
   id: string;
   name: string;
@@ -163,9 +165,7 @@ export class RoomManager {
   }
 
   private getWordsForTopic(topic: string): string[] {
-    // Import wordTopics dynamically to avoid circular imports
-    const { wordTopics } = require('@/data/wordTopics');
-    const topicData = wordTopics.find((t: any) => t.id === topic);
+    const topicData = wordTopics.find((t) => t.id === topic);
     return topicData?.words || [];
   }
 }
