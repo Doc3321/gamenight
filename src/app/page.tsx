@@ -1,103 +1,291 @@
-import Image from "next/image";
+'use client';
+
+import { useState } from 'react';
+import { motion } from 'framer-motion';
+import { WordGame } from '@/lib/gameLogic';
+import { wordTopics, WordTopic } from '@/data/wordTopics';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import GameBoard from '@/components/GameBoard';
+import JoinRoom from '@/components/JoinRoom';
+import RoomLobby from '@/components/RoomLobby';
+
+type GameMode = 'local' | 'online';
+
+interface Player {
+  id: string;
+  name: string;
+  isHost: boolean;
+  isReady: boolean;
+}
+
+type GameMode = 'similar-word' | 'imposter' | 'mixed';
+
+interface GameRoom {
+  id: string;
+  hostId: string;
+  players: Player[];
+  gameState: 'waiting' | 'playing' | 'finished';
+  currentTopic?: string;
+  gameWord?: string;
+  gameMode?: GameMode;
+  currentSpin: number;
+  totalSpins: number;
+  spinOrder: boolean[];
+}
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [gameMode, setGameMode] = useState<GameMode>('local');
+  const [game, setGame] = useState<WordGame | null>(null);
+  const [selectedTopic, setSelectedTopic] = useState<string>('');
+  const [gameStarted, setGameStarted] = useState(false);
+  
+  // Online game state
+  const [room, setRoom] = useState<GameRoom | null>(null);
+  const [currentPlayerId, setCurrentPlayerId] = useState<string>('');
+  const [playerName, setPlayerName] = useState<string>('');
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+  const startNewGame = (gameMode: GameMode = 'similar-word') => {
+    const topic = wordTopics.find(t => t.id === selectedTopic);
+    if (topic) {
+      const newGame = new WordGame(topic, gameMode);
+      setGame(newGame);
+      setGameStarted(true);
+    }
+  };
+
+  const resetGame = () => {
+    setGame(null);
+    setSelectedTopic('');
+    setGameStarted(false);
+    setRoom(null);
+    setCurrentPlayerId('');
+    setPlayerName('');
+  };
+
+  const createRoom = async (hostName: string) => {
+    try {
+      const response = await fetch('/api/rooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          hostId: `player_${Date.now()}`,
+          hostName 
+        })
+      });
+      
+      const data = await response.json();
+      if (data.room) {
+        setRoom(data.room);
+        setCurrentPlayerId(data.room.hostId);
+        setPlayerName(hostName);
+        setGameStarted(true);
+      }
+    } catch (error) {
+      console.error('Error creating room:', error);
+    }
+  };
+
+  const joinRoom = async (roomId: string, playerName: string) => {
+    try {
+      const response = await fetch('/api/rooms/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          roomId,
+          playerId: `player_${Date.now()}`,
+          playerName 
+        })
+      });
+      
+      const data = await response.json();
+      if (data.room) {
+        setRoom(data.room);
+        setCurrentPlayerId(data.room.players.find((p: Player) => p.name === playerName)?.id || '');
+        setPlayerName(playerName);
+        setGameStarted(true);
+      }
+    } catch (error) {
+      console.error('Error joining room:', error);
+    }
+  };
+
+  const startOnlineGame = async (topic: string, gameMode: GameMode) => {
+    if (!room) return;
+    
+    try {
+      const response = await fetch('/api/rooms/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId: room.id, topic, gameMode })
+      });
+      
+      const data = await response.json();
+      if (data.room) {
+        setRoom(data.room);
+        // Start local game with the same topic and mode
+        const topicData = wordTopics.find(t => t.id === topic);
+        if (topicData) {
+          setSelectedTopic(topic);
+          startNewGame(gameMode);
+        }
+      }
+    } catch (error) {
+      console.error('Error starting game:', error);
+    }
+  };
+
+  const leaveRoom = () => {
+    setRoom(null);
+    setCurrentPlayerId('');
+    setPlayerName('');
+    setGameStarted(false);
+  };
+
+  // Online mode - show join/create room
+  if (gameMode === 'online' && !room) {
+  return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
+        <div className="max-w-4xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            <JoinRoom onJoinRoom={joinRoom} onCreateRoom={createRoom} />
+          </motion.div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+      </div>
+    );
+  }
+
+  // Online mode - show room lobby
+  if (gameMode === 'online' && room && !game) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
+        <div className="max-w-4xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+          >
+            <RoomLobby
+              room={room}
+              currentPlayerId={currentPlayerId}
+              onStartGame={startOnlineGame}
+              onLeaveRoom={leaveRoom}
+            />
+          </motion.div>
+        </div>
+      </div>
+    );
+  }
+
+  // Local mode - show topic selection
+  if (!gameStarted && gameMode === 'local') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0, y: 50, scale: 0.9 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.6, type: "spring" }}
         >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+          <Card className="w-full max-w-md">
+            <CardHeader className="text-center">
+              <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                <CardTitle className="text-2xl font-bold text-center">משחק המילים</CardTitle>
+                <p className="text-muted-foreground">בחר מצב משחק</p>
+              </motion.div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => setGameMode('local')}
+                  variant={gameMode === 'local' ? 'default' : 'outline'}
+                  className="flex-1"
+                >
+                  מקומי
+                </Button>
+                <Button
+                  onClick={() => setGameMode('online')}
+                  variant={gameMode === 'online' ? 'default' : 'outline'}
+                  className="flex-1"
+                >
+                  אונליין
+                </Button>
+              </div>
+              
+              {gameMode === 'local' && (
+                <motion.div 
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.4 }}
+                  className="space-y-2"
+                >
+                  <label className="text-sm font-medium">בחר נושא:</label>
+                  <Select value={selectedTopic} onValueChange={setSelectedTopic}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="בחר נושא..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {wordTopics.map((topic) => (
+                        <SelectItem key={topic.id} value={topic.id}>
+                          {topic.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </motion.div>
+              )}
+              
+              {gameMode === 'local' && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.6 }}
+                >
+                  <Button 
+                    onClick={startNewGame} 
+                    disabled={!selectedTopic}
+                    className="w-full"
+                  >
+                    התחל משחק חדש
+                  </Button>
+                </motion.div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
+      <div className="container mx-auto px-4 py-8">
+        <motion.div 
+          initial={{ opacity: 0, y: -30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="text-center mb-8"
         >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+          <h1 className="text-3xl font-bold mb-2">משחק המילים</h1>
+          <p className="text-muted-foreground">נושא: {game?.getState().topic.name}</p>
+        </motion.div>
+        
+        <motion.div
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3, duration: 0.6 }}
         >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+          <GameBoard game={game!} onReset={resetGame} />
+        </motion.div>
+      </div>
     </div>
   );
 }
