@@ -21,7 +21,7 @@ export interface GameRoom {
   gameMode?: GameMode;
   currentSpin: number;
   totalSpins: number;
-  spinOrder: boolean[];
+  spinOrder: (boolean | 'similar' | 'imposter')[];
   createdAt: Date;
 }
 
@@ -121,7 +121,7 @@ export class RoomManager {
     const gameWord = words[Math.floor(Math.random() * words.length)];
 
     // Create spin order based on game mode
-    let spinOrder: boolean[];
+    let spinOrder: (boolean | 'similar' | 'imposter')[];
     switch (gameMode) {
       case 'similar-word':
         // 2 normal, 1 similar word

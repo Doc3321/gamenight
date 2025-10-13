@@ -20,7 +20,6 @@ interface Player {
   isReady: boolean;
 }
 
-type GameMode = 'similar-word' | 'imposter' | 'mixed';
 
 interface GameRoom {
   id: string;
@@ -29,10 +28,10 @@ interface GameRoom {
   gameState: 'waiting' | 'playing' | 'finished';
   currentTopic?: string;
   gameWord?: string;
-  gameMode?: GameMode;
+  gameMode?: GameModeType;
   currentSpin: number;
   totalSpins: number;
-  spinOrder: boolean[];
+  spinOrder: (boolean | 'similar' | 'imposter')[];
 }
 
 export default function Home() {
@@ -245,7 +244,7 @@ export default function Home() {
                   transition={{ delay: 0.6 }}
                 >
                   <Button 
-                    onClick={startNewGame} 
+                    onClick={() => startNewGame()} 
                     disabled={!selectedTopic}
                     className="w-full"
                   >

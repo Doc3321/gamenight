@@ -76,7 +76,8 @@ export default function GameBoard({ game, onReset }: GameBoardProps) {
       setLastResult({
         choices: game.getState().currentChoices,
         selectedWord: game.getState().selectedWord,
-        isImposter: game.getState().isImposter
+        isImposter: game.getState().isImposter,
+        spinType: game.getState().isImposter ? 'imposter' : 'normal'
       });
       setIsFirstSpin(false);
     }
