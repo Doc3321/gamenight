@@ -60,7 +60,6 @@ export default function Home() {
     setGameStarted(false);
     setRoom(null);
     setCurrentPlayerId('');
-    setPlayerName('');
   };
 
   const createRoom = async (hostName: string) => {
