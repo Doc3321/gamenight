@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { WordGame, GameMode } from '@/lib/gameLogic';
+import { WordGame, GameMode as GameModeType } from '@/lib/gameLogic';
 import { wordTopics } from '@/data/wordTopics';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -45,7 +45,7 @@ export default function Home() {
   const [room, setRoom] = useState<GameRoom | null>(null);
   const [currentPlayerId, setCurrentPlayerId] = useState<string>('');
 
-  const startNewGame = (gameMode: GameMode = 'similar-word') => {
+  const startNewGame = (gameMode: GameModeType = 'similar-word') => {
     const topic = wordTopics.find(t => t.id === selectedTopic);
     if (topic) {
       const newGame = new WordGame(topic, gameMode);
@@ -108,7 +108,7 @@ export default function Home() {
     }
   };
 
-  const startOnlineGame = async (topic: string, gameMode: GameMode) => {
+  const startOnlineGame = async (topic: string, gameMode: GameModeType) => {
     if (!room) return;
     
     try {
