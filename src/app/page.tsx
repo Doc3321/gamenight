@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { WordGame } from '@/lib/gameLogic';
+import { WordGame, GameMode } from '@/lib/gameLogic';
 import { wordTopics } from '@/data/wordTopics';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,7 +11,7 @@ import GameBoard from '@/components/GameBoard';
 import JoinRoom from '@/components/JoinRoom';
 import RoomLobby from '@/components/RoomLobby';
 
-type GameMode = 'local' | 'online';
+type AppMode = 'local' | 'online';
 
 interface Player {
   id: string;
@@ -36,7 +36,7 @@ interface GameRoom {
 }
 
 export default function Home() {
-  const [gameMode, setGameMode] = useState<GameMode>('local');
+  const [appMode, setAppMode] = useState<AppMode>('local');
   const [game, setGame] = useState<WordGame | null>(null);
   const [selectedTopic, setSelectedTopic] = useState<string>('');
   const [gameStarted, setGameStarted] = useState(false);
@@ -140,7 +140,7 @@ export default function Home() {
   };
 
   // Online mode - show join/create room
-  if (gameMode === 'online' && !room) {
+  if (appMode === 'online' && !room) {
   return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
         <div className="max-w-4xl mx-auto">
@@ -157,7 +157,7 @@ export default function Home() {
   }
 
   // Online mode - show room lobby
-  if (gameMode === 'online' && room && !game) {
+  if (appMode === 'online' && room && !game) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
         <div className="max-w-4xl mx-auto">
@@ -179,7 +179,7 @@ export default function Home() {
   }
 
   // Local mode - show topic selection
-  if (!gameStarted && gameMode === 'local') {
+  if (!gameStarted && appMode === 'local') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
         <motion.div
@@ -201,22 +201,22 @@ export default function Home() {
             <CardContent className="space-y-4">
               <div className="flex gap-2">
                 <Button
-                  onClick={() => setGameMode('local')}
-                  variant={gameMode === 'local' ? 'default' : 'outline'}
+                  onClick={() => setAppMode('local')}
+                  variant={appMode === 'local' ? 'default' : 'outline'}
                   className="flex-1"
                 >
                   מקומי
                 </Button>
                 <Button
-                  onClick={() => setGameMode('online')}
-                  variant={gameMode === 'online' ? 'default' : 'outline'}
+                  onClick={() => setAppMode('online')}
+                  variant={appMode === 'online' ? 'default' : 'outline'}
                   className="flex-1"
                 >
                   אונליין
                 </Button>
               </div>
               
-              {gameMode === 'local' && (
+              {appMode === 'local' && (
                 <motion.div 
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -239,7 +239,7 @@ export default function Home() {
                 </motion.div>
               )}
               
-              {gameMode === 'local' && (
+              {appMode === 'local' && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
