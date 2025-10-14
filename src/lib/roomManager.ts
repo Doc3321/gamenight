@@ -171,4 +171,11 @@ export class RoomManager {
 }
 
 // Singleton instance
-export const roomManager = new RoomManager();
+let roomManagerInstance: RoomManager | null = null;
+
+export const roomManager = (() => {
+  if (!roomManagerInstance) {
+    roomManagerInstance = new RoomManager();
+  }
+  return roomManagerInstance;
+})();
