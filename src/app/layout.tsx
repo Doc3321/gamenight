@@ -11,7 +11,7 @@ const heebo = Heebo({
 });
 
 export const metadata: Metadata = {
-  title: "WordQuest - משחק המילים",
+  title: "סוכן - משחק המילים",
   description: "משחק מילים חברתי ומהנה - מצא את המתחזה או המילה הדומה!",
 };
 
@@ -25,7 +25,7 @@ export default function RootLayout({
       <body
         className={`${heebo.variable} font-hebrew antialiased`}
       >
-        <ThemeProvider defaultTheme="system" storageKey="wordquest-theme">
+        <ThemeProvider defaultTheme="system" storageKey="soken-theme">
           {children}
           <Toaster position="top-center" richColors />
         </ThemeProvider>

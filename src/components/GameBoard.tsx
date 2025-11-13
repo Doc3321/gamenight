@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import VotingPhase from './VotingPhase';
 import PlayerAvatar from './PlayerAvatar';
+import ClassifiedStamp from './ClassifiedStamp';
 
 interface GameBoardProps {
   game: WordGame;
@@ -92,21 +93,18 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
   }, [game, isFirstSpin]);
 
   const handleVoteComplete = () => {
+    // Force state refresh to show next player
     const newState = game.getState();
     setGameState(newState);
     
-    // If there's an eliminated player, reset for next round or end game
-    if (newState.eliminatedPlayer) {
-      // For now, just show the result. Can add logic for multiple rounds later
-      setCurrentVotingPlayerIndex(0);
-    } else {
-      // Check if there are more players to vote
-      const activePlayers = newState.players.filter(p => !p.isEliminated);
-      const nextVoter = activePlayers.find(p => !p.hasVoted);
-      if (nextVoter) {
-        const voterIndex = newState.players.findIndex(p => p.id === nextVoter.id);
-        setCurrentVotingPlayerIndex(voterIndex);
-      }
+    // In local mode, the component will automatically show the next player
+    // because it checks for players who haven't voted in the render logic
+    if (!newState.isOnline) {
+      // Small delay to ensure state is fully updated
+      setTimeout(() => {
+        const updatedState = game.getState();
+        setGameState(updatedState);
+      }, 50);
     }
   };
 
@@ -127,9 +125,17 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
         );
       }
     } else {
-      // Local mode: sequential voting
+      // Local mode: sequential voting - show next player who hasn't voted
       const activePlayers = gameState.players.filter(p => !p.isEliminated);
-      const nextVoter = activePlayers.find(p => !p.hasVoted);
+      
+      // Check for mixed mode - need both votes
+      const isBothMode = gameState.gameMode === 'mixed';
+      const nextVoter = activePlayers.find(p => {
+        if (isBothMode) {
+          return !p.hasVoted || (p.votedForImposter === undefined || p.votedForOtherWord === undefined);
+        }
+        return !p.hasVoted;
+      });
       
       if (nextVoter) {
         // Update current voting player index
@@ -146,6 +152,13 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
             isAdmin={isAdmin}
           />
         );
+      } else {
+        // All players have voted, calculate results
+        if (!gameState.eliminatedPlayer) {
+          const result = game.calculateVotingResult();
+          const updatedState = game.getState();
+          setGameState(updatedState);
+        }
       }
     }
     
@@ -211,10 +224,11 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto relative">
+      <ClassifiedStamp level="SECRET" />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Game Status */}
-        <Card>
+        <Card className="relative overflow-hidden">
           <CardHeader>
             <CardTitle>סטטוס המשחק</CardTitle>
           </CardHeader>

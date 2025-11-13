@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import EmotePicker, { EmoteType } from './EmotePicker';
 import Confetti from './Confetti';
 import PlayerAvatar from './PlayerAvatar';
+import ClassifiedStamp from './ClassifiedStamp';
+import AgentBadge from './AgentBadge';
 
 interface VotingPhaseProps {
   game: WordGame;
@@ -39,7 +41,23 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     
     const success = game.castVote(currentPlayerId, target, voteType);
     if (success) {
-      setGameState(game.getState());
+      const newState = game.getState();
+      setGameState(newState);
+      
+      // Check if voting is complete for this player (both votes in mixed mode)
+      const currentPlayer = newState.players.find(p => p.id === currentPlayerId);
+      const isBothMode = newState.gameMode === 'mixed';
+      const isComplete = isBothMode 
+        ? (currentPlayer?.votedForImposter !== undefined && currentPlayer?.votedForOtherWord !== undefined)
+        : currentPlayer?.hasVoted;
+      
+      if (isComplete && !newState.isOnline) {
+        // In local mode, immediately trigger vote complete to show next player
+        setTimeout(() => {
+          onVoteComplete();
+        }, 300);
+      }
+      
       if (voteType === 'imposter') {
         setSelectedImposterTarget(null);
       } else if (voteType === 'other-word') {
@@ -367,6 +385,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 relative">
+      <ClassifiedStamp level="TOP SECRET" />
       <Confetti trigger={showConfetti} onComplete={() => setShowConfetti(false)} />
       
       {/* Display active emotes */}
@@ -414,11 +433,14 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
         <CardContent>
           {/* Current Player Info */}
           <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg text-center">
-            <div className="flex items-center justify-center gap-3 mb-2">
+            <div className="flex items-center justify-center gap-3 mb-2 flex-wrap">
               <PlayerAvatar name={currentPlayer?.name || ''} size="md" isActive={true} />
-              <div>
-                <p className="text-sm text-muted-foreground">השחקן שלך:</p>
-                <p className="text-xl font-bold">{currentPlayer?.name}</p>
+              <div className="flex-1 min-w-0">
+                <AgentBadge 
+                  agentName={currentPlayer?.name || ''} 
+                  agentNumber={currentPlayerId}
+                  size="sm"
+                />
               </div>
               <EmotePicker onEmoteSelect={handleEmote} />
             </div>

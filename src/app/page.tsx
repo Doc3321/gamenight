@@ -99,20 +99,28 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          roomId,
-          playerId: `player_${Date.now()}`,
-          playerName 
+          roomId: roomId.toUpperCase().trim(),
+          playerId: `player_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          playerName: playerName.trim()
         })
       });
       
       const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to join room');
+      }
+      
       if (data.room) {
         setRoom(data.room);
-        setCurrentPlayerId(data.room.players.find((p: Player) => p.name === playerName)?.id || '');
-        setGameStarted(true);
+        setCurrentPlayerId(data.room.players.find((p: Player) => p.name === playerName.trim())?.id || '');
+        setGameStarted(false); // Don't start game immediately, show lobby
+      } else {
+        throw new Error('Room not found');
       }
     } catch (error) {
       console.error('Error joining room:', error);
+      throw error; // Re-throw to let JoinRoom component handle it
     }
   };
 
@@ -227,12 +235,13 @@ export default function Home() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
               >
-                <div className="text-center space-y-2">
-                  <div className="text-4xl font-bold bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 bg-clip-text text-transparent">
-                    WordQuest
+                <div className="text-center space-y-2 relative">
+                  <div className="absolute -top-2 -right-2 text-2xl opacity-20">🕵️</div>
+                  <div className="text-5xl font-bold bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 bg-clip-text text-transparent mb-2 font-mono tracking-wider">
+                    סוכן
                   </div>
-                  <p className="text-lg text-muted-foreground">משחק המילים</p>
-                  <p className="text-sm text-muted-foreground">בחר מצב משחק</p>
+                  <p className="text-lg text-muted-foreground font-semibold">משחק המילים</p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-widest">CLASSIFIED OPERATION</p>
                 </div>
               </motion.div>
             </CardHeader>
@@ -323,8 +332,8 @@ export default function Home() {
           className="text-center mb-8"
         >
           <div className="text-center space-y-2 mb-8">
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 bg-clip-text text-transparent">
-              WordQuest
+            <h1 className="text-5xl font-bold bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 bg-clip-text text-transparent mb-2">
+              סוכן
             </h1>
             <p className="text-lg text-muted-foreground">נושא: {game?.getState().topic.name}</p>
           </div>

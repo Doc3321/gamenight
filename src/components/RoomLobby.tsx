@@ -4,9 +4,11 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Copy, Users, Play, LogOut } from 'lucide-react';
+import { Copy, Users, Play, LogOut, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import PlayerAvatar from './PlayerAvatar';
+import AgentBadge from './AgentBadge';
+import ClassifiedStamp from './ClassifiedStamp';
 
 interface Player {
   id: string;
@@ -115,8 +117,9 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
   ];
 
   return (
-    <div className="max-w-2xl mx-auto p-6 space-y-6">
-      <Card>
+    <div className="max-w-2xl mx-auto p-6 space-y-6 relative">
+      <ClassifiedStamp level="SECRET" />
+      <Card className="relative overflow-hidden">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-2xl">חדר משחק</CardTitle>
@@ -152,22 +155,20 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            {room.players.map((player) => (
+            {room.players.map((player, index) => (
               <div
                 key={player.id}
                 className="flex items-center justify-between p-3 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg border-2 border-transparent hover:border-purple-300 dark:hover:border-purple-600 transition-all"
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-1">
                   <PlayerAvatar name={player.name} size="md" />
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{player.name}</span>
-                      {player.isHost && (
-                        <Badge variant="default" className="text-xs bg-gradient-to-r from-purple-600 to-pink-600">
-                          👑 מארח
-                        </Badge>
-                      )}
-                    </div>
+                  <div className="flex-1 min-w-0">
+                    <AgentBadge 
+                      agentName={player.name} 
+                      agentNumber={index + 1}
+                      isHost={player.isHost}
+                      size="sm"
+                    />
                   </div>
                 </div>
                 {player.isReady ? (
