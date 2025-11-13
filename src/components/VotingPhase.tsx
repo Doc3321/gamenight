@@ -419,36 +419,42 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                 });
                 stateChanged = true;
               } else {
-                // Reset vote counts first, then apply votes from server
+                // Reset vote counts and voting status first
                 currentState.players.forEach(p => {
                   p.votes = 0;
+                  if (!p.isEliminated) {
+                    p.hasVoted = false;
+                    p.votedFor = undefined;
+                    p.votedForImposter = undefined;
+                    p.votedForOtherWord = undefined;
+                  }
                 });
                 
-                // Apply votes from server
+                // Apply votes from server and recalculate vote counts
                 Object.entries(serverState.votes).forEach(([voteKey, voteData]) => {
                   type VoteData = { voterId: number; targetId: number; voteType?: 'imposter' | 'other-word' };
                   const vote = voteData as VoteData;
                   const voter = currentState.players.find(p => p.id === vote.voterId);
-                  if (voter) {
+                  if (voter && !voter.isEliminated) {
                     // Apply vote from server
                     if (currentState.gameMode === 'mixed' && vote.voteType) {
-                      if (vote.voteType === 'imposter' && voter.votedForImposter === undefined) {
+                      if (vote.voteType === 'imposter') {
                         voter.votedForImposter = vote.targetId;
-                      } else if (vote.voteType === 'other-word' && voter.votedForOtherWord === undefined) {
+                      } else if (vote.voteType === 'other-word') {
                         voter.votedForOtherWord = vote.targetId;
                       }
                       // Mark as voted if both votes are cast
                       if (voter.votedForImposter !== undefined && voter.votedForOtherWord !== undefined) {
                         voter.hasVoted = true;
                       }
-                    } else if (!vote.voteType && voter.votedFor === undefined) {
+                    } else if (!vote.voteType) {
                       voter.votedFor = vote.targetId;
                       voter.hasVoted = true;
                     }
                     
-                    // Update target player's vote count
+                    // Update target player's vote count (only if target is not eliminated)
                     const target = currentState.players.find(p => p.id === vote.targetId);
-                    if (target) {
+                    if (target && !target.isEliminated) {
                       if (target.votes === undefined) target.votes = 0;
                       target.votes++;
                     }
@@ -581,14 +587,15 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   }, [game, showResults, tiedPlayers, handleCalculateResults, showTieResults, showWrongElimination]);
 
   const handleContinueAfterElimination = async () => {
-    // Clear eliminated player state and continue
+    // Use the game's continueAfterWrongElimination method to properly reset state
+    game.continueAfterWrongElimination();
     const newState = game.getState();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (game as any).state.eliminatedPlayer = undefined;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (game as any).state.wrongElimination = false;
-    const updatedState = game.getState();
-    setGameState(updatedState);
+    setGameState(newState);
+    setShowResults(false);
+    setEliminatedPlayer(null);
+    setSelectedTarget(null);
+    setSelectedImposterTarget(null);
+    setSelectedOtherWordTarget(null);
     
     // Sync continue after elimination to server
     if (roomId && gameState.isOnline) {
@@ -599,13 +606,13 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
           body: JSON.stringify({
             roomId,
             gameStateData: {
-              currentPlayerIndex: updatedState.currentPlayerIndex,
-              votingPhase: updatedState.votingPhase,
-              votingActivated: updatedState.votingActivated,
+              currentPlayerIndex: newState.currentPlayerIndex,
+              votingPhase: newState.votingPhase,
+              votingActivated: newState.votingActivated,
               wrongElimination: false,
               eliminatedPlayer: undefined,
               votes: {},
-              playerWords: updatedState.players.reduce((acc, p) => {
+              playerWords: newState.players.reduce((acc, p) => {
                 if (p.currentWord) {
                   acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
                 }
@@ -619,7 +626,8 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       }
     }
     
-    onVoteComplete();
+    // Don't call onVoteComplete - just let the component re-render with cleared state
+    // The voting phase will continue automatically
   };
 
   const currentPlayer = gameState.players.find(p => p.id === currentPlayerId);
