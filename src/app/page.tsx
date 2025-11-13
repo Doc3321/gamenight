@@ -132,11 +132,14 @@ export default function Home() {
         localStorage.setItem('playerId', playerId);
       }
       
+      // Normalize room ID
+      const normalizedRoomId = roomId.toUpperCase().trim();
+      
       const response = await fetch('/api/rooms/join', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          roomId: roomId.toUpperCase().trim(),
+          roomId: normalizedRoomId,
           playerId: playerId,
           playerName: playerName.trim()
         })
@@ -145,7 +148,9 @@ export default function Home() {
       const data = await response.json();
       
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to join room');
+        // Show specific error message from server
+        const errorMsg = data.error || 'Failed to join room';
+        throw new Error(errorMsg);
       }
       
       if (data.room) {

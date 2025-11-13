@@ -79,7 +79,14 @@ export class RoomManager {
     // Normalize room ID to uppercase for consistent lookup
     const normalizedRoomId = roomId.toUpperCase().trim();
     const room = this.rooms.get(normalizedRoomId);
-    if (!room || room.gameState !== 'waiting') {
+    
+    // Check if room exists
+    if (!room) {
+      return null;
+    }
+    
+    // Check if room is in waiting state
+    if (room.gameState !== 'waiting') {
       return null;
     }
 
@@ -101,7 +108,7 @@ export class RoomManager {
 
     room.players.push({
       id: playerId,
-      name: playerName,
+      name: playerName.trim(),
       isHost: false,
       isReady: false
     });
