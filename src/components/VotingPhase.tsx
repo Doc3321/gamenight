@@ -163,7 +163,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             if (data.room.gameStateData.emotes) {
               const recentEmotes = data.room.gameStateData.emotes
                 .filter((e: { timestamp: number }) => Date.now() - e.timestamp < 5000)
-                .map((e: { playerId: number; emote: string }) => {
+                .map((e: { playerId: number; emote: string; timestamp: number }) => {
                   const player = gameState.players.find(p => p.id === e.playerId);
                   return {
                     id: e.playerId * 1000 + e.timestamp,
