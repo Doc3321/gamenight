@@ -23,6 +23,7 @@ export interface GameRoom {
   totalSpins: number;
   spinOrder: (boolean | 'similar' | 'imposter')[];
   createdAt: Date;
+  playerOrder?: string[]; // Randomized player order (player IDs)
   // Real-time game state
   gameStateData?: {
     currentPlayerIndex: number;
@@ -173,27 +174,37 @@ export class RoomManager {
       return null;
     }
 
+    // Randomize player order
+    const shuffledPlayers = this.shuffleArray([...room.players]);
+    room.players = shuffledPlayers;
+    room.playerOrder = shuffledPlayers.map(p => p.id); // Store the randomized order
+
     // Select random word from topic
     const words = this.getWordsForTopic(topic);
     const gameWord = words[Math.floor(Math.random() * words.length)];
 
-    // Create spin order based on game mode
+    // Create spin order based on game mode and actual number of players
+    const numPlayers = room.players.length;
     let spinOrder: (boolean | 'similar' | 'imposter')[];
     switch (gameMode) {
       case 'similar-word':
-        // 2 normal, 1 similar word
-        spinOrder = [false, false, 'similar'];
+        // 1 similar word, rest normal
+        spinOrder = Array(numPlayers).fill(false).map((_, i) => i === 0 ? 'similar' : false);
         break;
       case 'imposter':
-        // 2 normal, 1 imposter
-        spinOrder = [false, false, 'imposter'];
+        // 1 imposter, rest normal
+        spinOrder = Array(numPlayers).fill(false).map((_, i) => i === 0 ? 'imposter' : false);
         break;
       case 'mixed':
-        // 1 normal, 1 similar word, 1 imposter
-        spinOrder = [false, 'similar', 'imposter'];
+        // 1 similar word, 1 imposter, rest normal
+        spinOrder = Array(numPlayers).fill(false).map((_, i) => {
+          if (i === 0) return 'similar';
+          if (i === 1) return 'imposter';
+          return false;
+        });
         break;
       default:
-        spinOrder = [false, false, 'similar'];
+        spinOrder = Array(numPlayers).fill(false).map((_, i) => i === 0 ? 'similar' : false);
     }
     
     const shuffledOrder = this.shuffleArray([...spinOrder]);
@@ -203,6 +214,7 @@ export class RoomManager {
     room.gameWord = gameWord;
     room.gameMode = gameMode;
     room.currentSpin = 0;
+    room.totalSpins = numPlayers;
     room.spinOrder = shuffledOrder;
 
     return room;

@@ -340,8 +340,8 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                   ? currentSpinningPlayer && viewingPlayer && currentSpinningPlayer.id === viewingPlayer.id
                   : true; // Local mode always shows
                 
-                if (gameState.isOnline && !hasMyWord && currentSpinningPlayerIndex < gameState.players.length) {
-                  // Online mode: waiting for my turn or it's someone else's turn
+                if (gameState.isOnline && currentSpinningPlayerIndex < gameState.players.length) {
+                  // Online mode: show whose turn it is
                   if (!isMyTurn && currentSpinningPlayer) {
                     return (
                       <motion.div 
@@ -349,12 +349,17 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="text-center text-muted-foreground py-8"
+                        className="text-center py-8"
                       >
-                        <p>ממתין לתורך...</p>
-                        <p className="text-sm mt-2">
-                          תור של: {currentSpinningPlayer.name}
-                        </p>
+                        <div className="space-y-4">
+                          <AgentSpinner size="md" message="ממתין לתורך..." />
+                          <div>
+                            <p className="text-lg font-semibold text-muted-foreground">ממתין לתורך...</p>
+                            <p className="text-sm mt-2 text-muted-foreground">
+                              תור של: <span className="font-bold">{currentSpinningPlayer.name}</span>
+                            </p>
+                          </div>
+                        </div>
                       </motion.div>
                     );
                   }

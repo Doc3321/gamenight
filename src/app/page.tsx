@@ -36,23 +36,43 @@ export default function Home() {
 
   // Detect when game starts for non-admin players
   useEffect(() => {
-    if (appMode === 'online' && room && !game && room.gameState === 'playing' && room.currentTopic && room.gameMode) {
-      // Game was started by admin, initialize for this player
+    if (appMode === 'online' && room && !game && room.gameState === 'playing' && room.currentTopic && room.gameMode && room.gameWord && room.spinOrder) {
+      console.log('Game started detected for non-admin player', { 
+        gameState: room.gameState, 
+        topic: room.currentTopic, 
+        mode: room.gameMode,
+        players: room.players.length,
+        gameWord: room.gameWord,
+        spinOrder: room.spinOrder
+      });
+      // Game was started by admin, initialize for this player with server data
       const topicData = wordTopics.find(t => t.id === room.currentTopic);
       if (topicData) {
         setSelectedTopic(room.currentTopic);
+        // Use the randomized player order from server
         const gamePlayers: GamePlayer[] = room.players.map((p, index: number) => ({
           id: index + 1,
           name: p.name
         }));
-        startNewGame(room.gameMode, gamePlayers, true); // isOnline = true
+        // Create game with server's game word and spin order
+        const newGame = new WordGame(topicData, room.gameMode, gamePlayers, true);
+        // Sync game word and spin order from server to keep all clients in sync
+        if (room.gameWord && room.spinOrder) {
+          newGame.syncFromServer(room.gameWord, room.spinOrder);
+        }
+        setGame(newGame);
+        setGameStarted(true);
+        setShowSetup(false);
+        console.log('Game initialized for non-admin player with server data');
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appMode, room?.gameState, room?.currentTopic, room?.gameMode, room?.players, game]);
+  }, [appMode, room, game]);
 
-  const startNewGame = (gameMode: GameModeType = 'similar-word', players: GamePlayer[] = [], isOnline: boolean = false) => {
-    const topic = wordTopics.find(t => t.id === selectedTopic);
+  const startNewGame = (gameMode: GameModeType = 'similar-word', players: GamePlayer[] = [], isOnline: boolean = false, topicId?: string) => {
+    const topic = topicId 
+      ? wordTopics.find(t => t.id === topicId)
+      : wordTopics.find(t => t.id === selectedTopic);
     if (topic) {
       const newGame = new WordGame(topic, gameMode, players, isOnline);
       setGame(newGame);
@@ -165,14 +185,19 @@ export default function Home() {
         setRoom(data.room);
         // Start local game with the same topic and mode, but mark as online
         const topicData = wordTopics.find(t => t.id === topic);
-        if (topicData) {
+        if (topicData && data.room.gameWord && data.room.spinOrder) {
           setSelectedTopic(topic);
-          // Convert room players to game players
+          // Convert room players to game players (using randomized order from server)
           const gamePlayers: GamePlayer[] = data.room.players.map((p: { id: string; name: string; isHost: boolean; isReady: boolean }, index: number) => ({
             id: index + 1,
             name: p.name
           }));
-          startNewGame(gameMode, gamePlayers, true); // isOnline = true
+          const newGame = new WordGame(topicData, gameMode, gamePlayers, true);
+          // Sync game word and spin order from server
+          newGame.syncFromServer(data.room.gameWord, data.room.spinOrder);
+          setGame(newGame);
+          setGameStarted(true);
+          setShowSetup(false);
           localStorage.setItem('roomId', data.room.id);
         }
       }

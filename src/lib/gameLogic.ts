@@ -117,6 +117,12 @@ export class WordGame {
     return { ...this.state };
   }
 
+  // Method to sync game word and spin order from server (for online games)
+  public syncFromServer(gameWord: string, spinOrder: (boolean | 'similar' | 'imposter')[]): void {
+    this.state.gameWord = gameWord;
+    this.state.spinOrder = spinOrder;
+  }
+
   public spin(): SpinResult | null {
     if (this.state.gameCompleted || this.state.currentPlayerIndex >= this.state.players.length) {
       return null;
