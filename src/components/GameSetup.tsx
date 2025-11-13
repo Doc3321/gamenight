@@ -20,6 +20,8 @@ interface GameSetupProps {
   onBack: () => void;
 }
 
+// selectedTopic is part of props but not used in component body
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default function GameSetup({ selectedTopic, onStartGame, onBack }: GameSetupProps) {
   const [gameMode, setGameMode] = useState<GameMode>('similar-word');
   const [numPlayers, setNumPlayers] = useState<number>(3);

@@ -16,7 +16,6 @@ export default function GameBoard({ game, onReset }: GameBoardProps) {
   const [isSpinning, setIsSpinning] = useState(false);
   const [gameState, setGameState] = useState(game.getState());
   const [showResult, setShowResult] = useState(false);
-  const [lastResult, setLastResult] = useState<SpinResult | null>(null);
   const [isFirstSpin, setIsFirstSpin] = useState(true);
   const [currentVotingPlayerIndex, setCurrentVotingPlayerIndex] = useState(0);
 
@@ -28,7 +27,6 @@ export default function GameBoard({ game, onReset }: GameBoardProps) {
     setTimeout(() => {
       const result = game.spin();
       if (result) {
-        setLastResult(result);
         setGameState(game.getState());
         setIsSpinning(false);
         setShowResult(true);
@@ -77,12 +75,6 @@ export default function GameBoard({ game, onReset }: GameBoardProps) {
     // If this is the first spin and we have a selected word, show it immediately
     if (isFirstSpin && newState.selectedWord) {
       setShowResult(true);
-      setLastResult({
-        choices: newState.currentChoices,
-        selectedWord: newState.selectedWord,
-        isImposter: newState.isImposter,
-        spinType: newState.isImposter ? 'imposter' : 'normal'
-      });
       setIsFirstSpin(false);
     }
 

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Event, EventType, MostViewsEventConfig, ViewRequirement, Prize } from '@/types/campaigner';
+import { Event, EventType, MostViewsEventConfig, Prize } from '@/types/campaigner';
 import { validateEventConfig } from '@/lib/eventValidation';
 
 interface CampaignerDashboardProps {
@@ -85,7 +85,7 @@ export default function CampaignerDashboard({ campaignerId }: CampaignerDashboar
     });
   };
 
-  const handleConfigChange = (field: string, value: any) => {
+  const handleConfigChange = (field: string, value: string | number | boolean) => {
     setNewEvent(prev => ({
       ...prev,
       config: {
@@ -95,7 +95,7 @@ export default function CampaignerDashboard({ campaignerId }: CampaignerDashboar
     }));
   };
 
-  const handleViewRequirementChange = (field: string, value: any) => {
+  const handleViewRequirementChange = (field: string, value: number | undefined) => {
     setNewEvent(prev => ({
       ...prev,
       config: {
@@ -139,7 +139,7 @@ export default function CampaignerDashboard({ campaignerId }: CampaignerDashboar
     }));
   };
 
-  const updatePrize = (position: number, field: string, value: any) => {
+  const updatePrize = (position: number, field: string, value: string | number | undefined) => {
     const currentPrizes = (newEvent.config as MostViewsEventConfig)?.prizes || [];
     const updatedPrizes = currentPrizes.map(prize => 
       prize.position === position 
@@ -274,7 +274,7 @@ export default function CampaignerDashboard({ campaignerId }: CampaignerDashboar
                   </div>
                   
                   <div className="space-y-2">
-                    {(newEvent.config as MostViewsEventConfig)?.prizes?.map((prize, index) => (
+                    {(newEvent.config as MostViewsEventConfig)?.prizes?.map((prize) => (
                       <div key={prize.position} className="flex gap-2 items-center p-2 border rounded">
                         <div className="flex-1">
                           <Label htmlFor={`prize-name-${prize.position}`}>Prize Name</Label>

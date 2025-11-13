@@ -46,7 +46,7 @@ export interface Event {
   title: string;
   description: string;
   type: EventType;
-  config: MostViewsEventConfig | Record<string, any>;
+  config: MostViewsEventConfig | Record<string, unknown>;
   startDate: Date;
   endDate: Date;
   isActive: boolean;

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Clipper, Clip, Event, EventParticipation, Prize } from '@/types/campaigner';
+import { Clipper, Clip, Event, Prize, MostViewsEventConfig } from '@/types/campaigner';
 import { calculateClipperScore, rankClippers } from '@/lib/eventValidation';
 
 interface ClipperManagementProps {
@@ -15,7 +15,6 @@ interface ClipperManagementProps {
 export default function ClipperManagement({ events }: ClipperManagementProps) {
   const [clippers, setClippers] = useState<Clipper[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<string>('');
-  const [participations, setParticipations] = useState<EventParticipation[]>([]);
 
   const addClipper = () => {
     const newClipper: Clipper = {
@@ -47,7 +46,7 @@ export default function ClipperManagement({ events }: ClipperManagementProps) {
     ));
   };
 
-  const updateClip = (clipperId: string, clipId: string, field: string, value: any) => {
+  const updateClip = (clipperId: string, clipId: string, field: string, value: string | number) => {
     setClippers(prev => prev.map(clipper => 
       clipper.id === clipperId 
         ? {
@@ -70,7 +69,7 @@ export default function ClipperManagement({ events }: ClipperManagementProps) {
     const event = events.find(e => e.id === eventId);
     if (!event || event.type !== 'most-views') return [];
 
-    const eventConfig = event.config as any;
+    const eventConfig = event.config as MostViewsEventConfig;
     
     // Calculate scores for each clipper
     const clipperScores = clippers.map(clipper => {
@@ -102,7 +101,7 @@ export default function ClipperManagement({ events }: ClipperManagementProps) {
   const selectedEventResults = selectedEvent ? getEventResults(selectedEvent) : [];
   const selectedEventData = selectedEvent ? events.find(e => e.id === selectedEvent) : null;
   const selectedEventPrizes = selectedEventData && selectedEventData.type === 'most-views' 
-    ? (selectedEventData.config as any).prizes || []
+    ? (selectedEventData.config as MostViewsEventConfig).prizes || []
     : [];
 
   return (

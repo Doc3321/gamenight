@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import { WordGame, Player } from '@/lib/gameLogic';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,7 +29,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete }: V
     }
   };
 
-  const handleCalculateResults = () => {
+  const handleCalculateResults = useCallback(() => {
     const result = game.calculateVotingResult();
     setGameState(game.getState());
     
@@ -46,7 +46,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete }: V
       setShowResults(true);
       setEliminatedPlayer(result.eliminated);
     }
-  };
+  }, [game]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -77,7 +77,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete }: V
     }, 500); // Check every 500ms for updates
 
     return () => clearInterval(interval);
-  }, [game, showResults, isTieBreak]);
+  }, [game, showResults, isTieBreak, tiedPlayers, handleCalculateResults]);
 
   const handleContinueAfterElimination = () => {
     onVoteComplete();

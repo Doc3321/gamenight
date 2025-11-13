@@ -7,7 +7,7 @@ import { Event } from '@/types/campaigner';
 
 export default function CampaignerPage() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'clippers'>('dashboard');
-  const [events, setEvents] = useState<Event[]>([]);
+  const [events] = useState<Event[]>([]);
 
   // Mock campaigner ID - in a real app, this would come from authentication
   const campaignerId = 'campaigner_123';
