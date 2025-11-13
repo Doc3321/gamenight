@@ -9,24 +9,7 @@ import { toast } from 'sonner';
 import PlayerAvatar from './PlayerAvatar';
 import AgentBadge from './AgentBadge';
 import ClassifiedStamp from './ClassifiedStamp';
-
-interface Player {
-  id: string;
-  name: string;
-  isHost: boolean;
-  isReady: boolean;
-}
-
-type GameMode = 'similar-word' | 'imposter' | 'mixed';
-
-interface GameRoom {
-  id: string;
-  hostId: string;
-  players: Player[];
-  gameState: 'waiting' | 'playing' | 'finished';
-  currentTopic?: string;
-  gameMode?: GameMode;
-}
+import { GameRoom, GameMode } from '@/lib/roomManager';
 
 interface RoomLobbyProps {
   room: GameRoom;
