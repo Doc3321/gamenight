@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
-import { Smile, ThumbsUp, Heart, Fire, Clap, PartyPopper } from 'lucide-react';
+import { Smile, ThumbsUp, Heart, Flame, Hand, PartyPopper } from 'lucide-react';
 
 export type EmoteType = '👍' | '❤️' | '🔥' | '👏' | '🎉' | '😊';
 
@@ -15,8 +15,8 @@ interface EmotePickerProps {
 const emotes: { type: EmoteType; icon: React.ReactNode; label: string }[] = [
   { type: '👍', icon: <ThumbsUp className="w-5 h-5" />, label: 'Thumbs Up' },
   { type: '❤️', icon: <Heart className="w-5 h-5" />, label: 'Heart' },
-  { type: '🔥', icon: <Fire className="w-5 h-5" />, label: 'Fire' },
-  { type: '👏', icon: <Clap className="w-5 h-5" />, label: 'Clap' },
+  { type: '🔥', icon: <Flame className="w-5 h-5" />, label: 'Fire' },
+  { type: '👏', icon: <Hand className="w-5 h-5" />, label: 'Clap' },
   { type: '🎉', icon: <PartyPopper className="w-5 h-5" />, label: 'Party' },
   { type: '😊', icon: <Smile className="w-5 h-5" />, label: 'Smile' },
 ];

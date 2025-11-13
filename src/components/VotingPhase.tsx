@@ -6,7 +6,6 @@ import { WordGame, Player } from '@/lib/gameLogic';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import EmotePicker, { EmoteType } from './EmotePicker';
-import EmoteDisplay from './EmoteDisplay';
 import Confetti from './Confetti';
 import PlayerAvatar from './PlayerAvatar';
 
@@ -367,7 +366,35 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   const bothVotesComplete = isBothMode ? (hasVotedImposter && hasVotedOtherWord) : hasVoted;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6 relative">
+      <Confetti trigger={showConfetti} onComplete={() => setShowConfetti(false)} />
+      
+      {/* Display active emotes */}
+      {activeEmotes.length > 0 && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 flex gap-2 flex-wrap justify-center">
+          {activeEmotes.map((emoteData) => (
+            <motion.div
+              key={emoteData.id}
+              initial={{ opacity: 0, scale: 0, y: 20 }}
+              animate={{ 
+                opacity: [0, 1, 1, 0],
+                scale: [0, 1.2, 1, 0.8],
+                y: [20, -20, -40, -60],
+              }}
+              transition={{ 
+                duration: 2,
+                times: [0, 0.2, 0.8, 1],
+                ease: "easeOut"
+              }}
+              className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-3 py-1 rounded-full shadow-lg flex items-center gap-2 text-sm"
+            >
+              <span>{emoteData.emote}</span>
+              <span className="font-semibold">{emoteData.playerName}</span>
+            </motion.div>
+          ))}
+        </div>
+      )}
+
       <Card>
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">

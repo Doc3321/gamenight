@@ -49,7 +49,7 @@ export function ThemeProvider({
     // Apply theme
     root.classList.remove('light', 'dark');
     root.classList.add(resolved);
-  }, []);
+  }, [defaultTheme, storageKey]);
 
   useEffect(() => {
     const root = window.document.documentElement;

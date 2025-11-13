@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { WordGame, GameMode as GameModeType } from '@/lib/gameLogic';
 import { wordTopics } from '@/data/wordTopics';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import GameBoard from '@/components/GameBoard';
 import JoinRoom from '@/components/JoinRoom';
@@ -252,7 +252,7 @@ export default function Home() {
                 </Button>
                 <Button
                   onClick={() => setAppMode('online')}
-                  variant={(appMode as AppMode) === 'online' ? 'default' : 'outline'}
+                  variant={appMode === 'online' ? 'default' : 'outline'}
                   className={`flex-1 transition-all ${
                     appMode === 'online' 
                       ? 'bg-gradient-to-r from-pink-600 to-orange-500 hover:from-pink-700 hover:to-orange-600 shadow-lg' 
