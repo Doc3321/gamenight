@@ -29,7 +29,6 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   const [gameState, setGameState] = useState(game.getState());
   const [showResults, setShowResults] = useState(false);
   const [eliminatedPlayer, setEliminatedPlayer] = useState<Player | null>(null);
-  const [isTieBreak, setIsTieBreak] = useState(false);
   const [tiedPlayers, setTiedPlayers] = useState<Player[]>([]);
   const [showTieResults, setShowTieResults] = useState(false);
   const [showWrongElimination, setShowWrongElimination] = useState(false);
@@ -110,7 +109,6 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       if (newState.isOnline && isComplete) {
         // Wait a bit for server sync, then check if all voted
         setTimeout(() => {
-          const updatedState = game.getState();
           if (game.allPlayersVoted() && !showResults && !showTieResults && !showWrongElimination) {
             handleCalculateResults();
           }
@@ -164,7 +162,6 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     
     if (result.isTie) {
       // Show tie results - just option to revote
-      setIsTieBreak(false); // Don't do tie-break voting, just show revote option
       setTiedPlayers(result.tiedPlayers);
       setShowTieResults(true);
       
@@ -447,7 +444,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                 });
                 
                 // Apply votes from server and recalculate vote counts
-                Object.entries(serverState.votes).forEach(([voteKey, voteData]) => {
+                Object.entries(serverState.votes).forEach(([, voteData]) => {
                   type VoteData = { voterId: number; targetId: number; voteType?: 'imposter' | 'other-word' };
                   const vote = voteData as VoteData;
                   const voter = currentState.players.find(p => p.id === vote.voterId);
@@ -487,14 +484,14 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               if (shouldShowTie && !showTieResults) {
                 // Show tie results
                 setShowTieResults(true);
-                if (serverState.tiedPlayers && Array.isArray(serverState.tiedPlayers)) {
-                  const currentState = game.getState();
-                  const tiedPlayersFromServer = serverState.tiedPlayers.map((tp: { id: number; name: string; votes: number }) => {
-                    const player = currentState.players.find(p => p.id === tp.id);
-                    return player || { id: tp.id, name: tp.name, votes: tp.votes };
-                  });
-                  setTiedPlayers(tiedPlayersFromServer);
-                }
+                      if (serverState.tiedPlayers && Array.isArray(serverState.tiedPlayers)) {
+                        const tiedPlayersFromServer = serverState.tiedPlayers.map((tp: { id: number; name: string; votes: number }) => {
+                          const gameState = game.getState();
+                          const player = gameState.players.find(p => p.id === tp.id);
+                          return player || { id: tp.id, name: tp.name, votes: tp.votes };
+                        });
+                        setTiedPlayers(tiedPlayersFromServer);
+                      }
                 stateChanged = true;
               } else if (!shouldShowTie && showTieResults) {
                 // Hide tie results (revote was triggered) - this is the key fix
@@ -624,14 +621,16 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               const isBothMode = currentState.gameMode === 'mixed';
               
               // Check if all players have voted based on server votes
+              type VoteData = { voterId: number; targetId: number; voteType?: 'imposter' | 'other-word' };
+              const votesArray = Object.values(serverVotes) as VoteData[];
               let allVoted = true;
               for (const player of activePlayers) {
                 if (isBothMode) {
                   // Check if both votes exist in server votes
-                  const hasImposterVote = Object.values(serverVotes).some((v: { voterId: number; voteType?: string }) => 
+                  const hasImposterVote = votesArray.some(v => 
                     v.voterId === player.id && v.voteType === 'imposter'
                   );
-                  const hasOtherVote = Object.values(serverVotes).some((v: { voterId: number; voteType?: string }) => 
+                  const hasOtherVote = votesArray.some(v => 
                     v.voterId === player.id && v.voteType === 'other-word'
                   );
                   if (!hasImposterVote || !hasOtherVote) {
@@ -640,7 +639,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                   }
                 } else {
                   // Check if vote exists in server votes
-                  const hasVote = Object.values(serverVotes).some((v: { voterId: number; voteType?: string }) => 
+                  const hasVote = votesArray.some(v => 
                     v.voterId === player.id && !v.voteType
                   );
                   if (!hasVote) {
@@ -653,7 +652,6 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               // If all voted and results not shown, calculate results
               if (allVoted && !showResults && !showTieResults && !showWrongElimination) {
                 // Make sure local state is synced before calculating
-                const newState = game.getState();
                 if (game.allPlayersVoted()) {
                   handleCalculateResults();
                 }
@@ -667,7 +665,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
 
       return () => clearInterval(interval);
     }
-  }, [game, showResults, tiedPlayers, handleCalculateResults, showTieResults, showWrongElimination, gameState.isOnline, roomId]);
+  }, [game, showResults, handleCalculateResults, showTieResults, showWrongElimination, gameState.isOnline, roomId]);
 
   const handleContinueAfterElimination = async () => {
     // Use the game's continueAfterWrongElimination method to properly reset state
