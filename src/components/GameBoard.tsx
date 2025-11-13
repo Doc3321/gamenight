@@ -66,7 +66,6 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
   const handleReset = () => {
     game.reset();
     setShowResult(false);
-    setLastResult(null);
     setGameState(game.getState());
   };
 

@@ -99,7 +99,6 @@ export default function ClipperManagement({ events }: ClipperManagementProps) {
   };
 
   const selectedEventResults = selectedEvent ? getEventResults(selectedEvent) : [];
-  const selectedEventData = selectedEvent ? events.find(e => e.id === selectedEvent) : null;
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
