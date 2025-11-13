@@ -11,7 +11,6 @@ import GameBoard from '@/components/GameBoard';
 import JoinRoom from '@/components/JoinRoom';
 import RoomLobby from '@/components/RoomLobby';
 import GameSetup from '@/components/GameSetup';
-import Link from 'next/link';
 import { Player as GamePlayer } from '@/lib/gameLogic';
 
 type AppMode = 'local' | 'online';
@@ -155,7 +154,7 @@ export default function Home() {
   // Online mode - show join/create room
   if (appMode === 'online' && !room) {
   return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 dark:from-gray-900 dark:via-purple-900 dark:to-gray-800 p-4">
         <div className="max-w-4xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -172,7 +171,7 @@ export default function Home() {
   // Online mode - show room lobby
   if (appMode === 'online' && room && !game) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 dark:from-gray-900 dark:via-purple-900 dark:to-gray-800 p-4">
         <div className="max-w-4xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -205,7 +204,7 @@ export default function Home() {
   // Local mode - show topic selection
   if (!gameStarted && appMode === 'local') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 dark:from-gray-900 dark:via-purple-900 dark:to-gray-800 flex items-center justify-center p-4">
         <motion.div
           initial={{ opacity: 0, y: 50, scale: 0.9 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -218,34 +217,41 @@ export default function Home() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
               >
-                <CardTitle className="text-2xl font-bold text-center">משחק המילים</CardTitle>
-                <p className="text-muted-foreground">בחר מצב משחק</p>
+                <div className="text-center space-y-2">
+                  <div className="text-4xl font-bold bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 bg-clip-text text-transparent">
+                    WordQuest
+                  </div>
+                  <p className="text-lg text-muted-foreground">משחק המילים</p>
+                  <p className="text-sm text-muted-foreground">בחר מצב משחק</p>
+                </div>
               </motion.div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex gap-2">
+              <div className="flex gap-3">
                 <Button
                   onClick={() => setAppMode('local')}
                   variant={appMode === 'local' ? 'default' : 'outline'}
-                  className="flex-1"
+                  className={`flex-1 transition-all ${
+                    appMode === 'local' 
+                      ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg' 
+                      : 'border-2 hover:border-purple-400'
+                  }`}
+                  size="lg"
                 >
-                  מקומי
+                  🎮 מקומי
                 </Button>
                 <Button
                   onClick={() => setAppMode('online')}
                   variant={(appMode as AppMode) === 'online' ? 'default' : 'outline'}
-                  className="flex-1"
+                  className={`flex-1 transition-all ${
+                    appMode === 'online' 
+                      ? 'bg-gradient-to-r from-pink-600 to-orange-500 hover:from-pink-700 hover:to-orange-600 shadow-lg' 
+                      : 'border-2 hover:border-pink-400'
+                  }`}
+                  size="lg"
                 >
-                  אונליין
+                  🌐 אונליין
                 </Button>
-              </div>
-              
-              <div className="pt-4 border-t">
-                <Link href="/campaigner">
-                  <Button variant="outline" className="w-full">
-                    Campaigner Dashboard
-                  </Button>
-                </Link>
               </div>
               
               {appMode === 'local' && (
@@ -280,9 +286,10 @@ export default function Home() {
                   <Button 
                     onClick={() => setShowSetup(true)} 
                     disabled={!selectedTopic}
-                    className="w-full"
+                    className="w-full bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 hover:from-purple-700 hover:via-pink-700 hover:to-orange-600 shadow-lg text-white font-semibold"
+                    size="lg"
                   >
-                    הגדר משחק
+                    🎯 התחל משחק
                   </Button>
                 </motion.div>
               )}
@@ -294,7 +301,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 dark:from-gray-900 dark:via-purple-900 dark:to-gray-800">
       <div className="container mx-auto px-4 py-8">
         <motion.div 
           initial={{ opacity: 0, y: -30 }}
@@ -302,8 +309,12 @@ export default function Home() {
           transition={{ duration: 0.6 }}
           className="text-center mb-8"
         >
-          <h1 className="text-3xl font-bold mb-2">משחק המילים</h1>
-          <p className="text-muted-foreground">נושא: {game?.getState().topic.name}</p>
+          <div className="text-center space-y-2 mb-8">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 bg-clip-text text-transparent">
+              WordQuest
+            </h1>
+            <p className="text-lg text-muted-foreground">נושא: {game?.getState().topic.name}</p>
+          </div>
         </motion.div>
         
         <motion.div

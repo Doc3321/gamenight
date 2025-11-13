@@ -117,9 +117,11 @@ export default function JoinRoom({ onJoinRoom, onCreateRoom }: JoinRoomProps) {
         </Card>
       )}
 
-      <Card>
+      <Card className="border-2 border-purple-200 dark:border-purple-800">
         <CardHeader>
-          <CardTitle className="text-2xl text-center">הצטרף לחדר</CardTitle>
+          <CardTitle className="text-2xl text-center bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent font-bold">
+            הצטרף לחדר
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -147,10 +149,10 @@ export default function JoinRoom({ onJoinRoom, onCreateRoom }: JoinRoomProps) {
           <Button
             onClick={() => handleJoinRoom()}
             disabled={isJoining || !roomId.trim() || !playerName.trim()}
-            className="w-full"
+            className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg text-white font-semibold"
             size="lg"
           >
-            {isJoining ? 'מצטרף...' : 'הצטרף לחדר'}
+            {isJoining ? 'מצטרף...' : '🎮 הצטרף לחדר'}
           </Button>
         </CardContent>
       </Card>
@@ -159,9 +161,11 @@ export default function JoinRoom({ onJoinRoom, onCreateRoom }: JoinRoomProps) {
         <span className="text-muted-foreground">או</span>
       </div>
 
-      <Card>
+      <Card className="border-2 border-pink-200 dark:border-pink-800">
         <CardHeader>
-          <CardTitle className="text-2xl text-center">צור חדר חדש</CardTitle>
+          <CardTitle className="text-2xl text-center bg-gradient-to-r from-pink-600 to-orange-500 bg-clip-text text-transparent font-bold">
+            צור חדר חדש
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -178,11 +182,10 @@ export default function JoinRoom({ onJoinRoom, onCreateRoom }: JoinRoomProps) {
           <Button
             onClick={handleCreateRoom}
             disabled={isCreating || !playerName.trim()}
-            className="w-full"
+            className="w-full bg-gradient-to-r from-pink-600 to-orange-500 hover:from-pink-700 hover:to-orange-600 shadow-lg text-white font-semibold"
             size="lg"
-            variant="outline"
           >
-            {isCreating ? 'יוצר...' : 'צור חדר חדש'}
+            {isCreating ? 'יוצר...' : '✨ צור חדר חדש'}
           </Button>
         </CardContent>
       </Card>

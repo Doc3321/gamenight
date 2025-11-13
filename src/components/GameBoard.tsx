@@ -248,8 +248,12 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                   }
                 }
                 return (
-                  <Button onClick={handleSpin} className="w-full" size="lg">
-                    סובב! 🎯
+                  <Button 
+                    onClick={handleSpin} 
+                    className="w-full bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 hover:from-purple-700 hover:via-pink-700 hover:to-orange-600 shadow-lg text-white font-semibold" 
+                    size="lg"
+                  >
+                    🎯 סובב!
                   </Button>
                 );
               })()
@@ -317,7 +321,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                       transition={{ duration: 0.6, type: "spring" }}
                       className="text-center"
                     >
-                      <div className="p-6 bg-primary/10 rounded-lg text-center text-2xl font-bold border-2 border-primary/20 hover:bg-primary/20 transition-colors">
+                      <div className="p-8 bg-gradient-to-br from-purple-100 via-pink-100 to-orange-100 dark:from-purple-900/20 dark:via-pink-900/20 dark:to-orange-900/20 rounded-xl text-center text-3xl font-bold border-2 border-purple-300 dark:border-purple-700 hover:shadow-lg transition-all">
                         {wordToShow}
                       </div>
                       {(gameState.currentChoices[0] || viewingPlayer?.currentWord) && (
@@ -366,15 +370,23 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
         >
           {gameState.currentPlayerIndex < gameState.players.length ? (
             // More players to spin
-            <Button onClick={handleNextSpin} className="w-full max-w-md" size="lg">
+            <Button 
+              onClick={handleNextSpin} 
+              className="w-full max-w-md bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg text-white font-semibold" 
+              size="lg"
+            >
               סיבוב הבא
             </Button>
           ) : gameState.currentPlayerIndex >= gameState.players.length ? (
             // All players have spun - this is the last player viewing their word
             <div className="space-y-2">
               <p className="text-lg font-semibold">כל השחקנים קיבלו את המילים שלהם!</p>
-              <Button onClick={handleNextSpin} className="w-full max-w-md" size="lg">
-                התחל הצבעה
+              <Button 
+                onClick={handleNextSpin} 
+                className="w-full max-w-md bg-gradient-to-r from-pink-600 to-orange-500 hover:from-pink-700 hover:to-orange-600 shadow-lg text-white font-semibold" 
+                size="lg"
+              >
+                🗳️ התחל הצבעה
               </Button>
             </div>
           ) : null}

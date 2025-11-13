@@ -10,8 +10,8 @@ const heebo = Heebo({
 });
 
 export const metadata: Metadata = {
-  title: "משחק המילים",
-  description: "משחק מילים עם נושאים שונים",
+  title: "WordQuest - משחק המילים",
+  description: "משחק מילים חברתי ומהנה - מצא את המתחזה או המילה הדומה!",
 };
 
 export default function RootLayout({
