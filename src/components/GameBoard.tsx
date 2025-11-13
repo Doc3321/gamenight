@@ -171,6 +171,73 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
     setGameState(game.getState());
   };
 
+  // Poll for game state updates in online mode
+  useEffect(() => {
+    if (!gameState.isOnline || !roomId) return;
+    
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/rooms/game-state?roomId=${roomId}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.room?.gameStateData) {
+            const serverState = data.room.gameStateData;
+            const currentState = game.getState();
+            let stateChanged = false;
+            
+            // Update currentPlayerIndex from server
+            if (serverState.currentPlayerIndex !== undefined && serverState.currentPlayerIndex !== currentState.currentPlayerIndex) {
+              // Directly update the game's internal state
+              (game as any).state.currentPlayerIndex = serverState.currentPlayerIndex;
+              // Also update currentSpin to match
+              (game as any).state.currentSpin = serverState.currentPlayerIndex;
+              stateChanged = true;
+            }
+            
+            // Sync player words from server
+            if (serverState.playerWords) {
+              Object.entries(serverState.playerWords).forEach(([playerIdStr, wordData]: [string, any]) => {
+                const playerId = parseInt(playerIdStr);
+                const player = (game as any).state.players.find((p: any) => p.id === playerId);
+                if (player) {
+                  if (player.currentWord !== wordData.word) {
+                    player.currentWord = wordData.word;
+                    player.wordType = wordData.type;
+                    stateChanged = true;
+                  }
+                }
+              });
+            }
+            
+            // Update voting phase
+            if (serverState.votingPhase !== undefined && serverState.votingPhase !== currentState.votingPhase) {
+              (game as any).state.votingPhase = serverState.votingPhase;
+              stateChanged = true;
+            }
+            
+            if (serverState.votingActivated !== undefined && serverState.votingActivated !== currentState.votingActivated) {
+              (game as any).state.votingActivated = serverState.votingActivated;
+              stateChanged = true;
+            }
+            
+            if (stateChanged) {
+              // Force a fresh state update with deep copy of players array
+              const updatedState = game.getState();
+              setGameState({ 
+                ...updatedState,
+                players: updatedState.players.map(p => ({ ...p }))
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error polling game state:', error);
+      }
+    }, 500); // Poll every 500ms for faster updates
+    
+    return () => clearInterval(pollInterval);
+  }, [gameState.isOnline, roomId, game]);
+
   useEffect(() => {
     const newState = game.getState();
     setGameState(newState);
@@ -352,23 +419,56 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
               </div>
             )}
             
-            {!showResult && !isSpinning && !gameState.selectedWord && gameState.currentPlayerIndex < gameState.players.length && (
-              (() => {
-                // For online mode, only show spin button if it's viewing player's turn
-                if (gameState.isOnline && viewingPlayerId) {
-                  const currentSpinningPlayer = gameState.players[gameState.currentPlayerIndex];
-                  const isMyTurn = currentSpinningPlayer && currentSpinningPlayer.id === viewingPlayerId;
-                  if (!isMyTurn) {
-                    return (
-                      <div className="text-center text-muted-foreground">
-                        <p>ממתין לתורך...</p>
-                        {currentSpinningPlayer && (
-                          <p className="text-sm mt-2">תור של: {currentSpinningPlayer.name}</p>
-                        )}
-                      </div>
-                    );
-                  }
+            {(() => {
+              // Show status message or spin button
+              if (isSpinning) {
+                return null; // Spinning animation is shown separately
+              }
+              
+              if (gameState.isOnline && viewingPlayerId && gameState.currentPlayerIndex < gameState.players.length) {
+                const currentSpinningPlayer = gameState.players[gameState.currentPlayerIndex];
+                const viewingPlayer = gameState.players.find(p => p.id === viewingPlayerId);
+                const hasMyWord = viewingPlayer?.currentWord !== undefined;
+                const isMyTurn = currentSpinningPlayer && currentSpinningPlayer.id === viewingPlayerId;
+                
+                // If player already has their word, show status message
+                if (hasMyWord && !isMyTurn) {
+                  return (
+                    <div className="text-center text-muted-foreground">
+                      <p className="text-sm">קיבלת את המילה שלך</p>
+                      {currentSpinningPlayer && (
+                        <p className="text-sm mt-2">תור של: {currentSpinningPlayer.name}</p>
+                      )}
+                    </div>
+                  );
                 }
+                
+                // If it's not my turn and I don't have my word yet
+                if (!isMyTurn && !hasMyWord) {
+                  return (
+                    <div className="text-center text-muted-foreground">
+                      <p>ממתין לתורך...</p>
+                      {currentSpinningPlayer && (
+                        <p className="text-sm mt-2">תור של: {currentSpinningPlayer.name}</p>
+                      )}
+                    </div>
+                  );
+                }
+                
+                // If it's my turn and I don't have my word yet, show spin button
+                if (isMyTurn && !hasMyWord && !showResult) {
+                  return (
+                    <Button 
+                      onClick={handleSpin} 
+                      className="w-full bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 hover:from-purple-700 hover:via-pink-700 hover:to-orange-600 shadow-lg text-white font-semibold" 
+                      size="lg"
+                    >
+                      🎯 סובב!
+                    </Button>
+                  );
+                }
+              } else if (!gameState.isOnline && !showResult && !gameState.selectedWord && gameState.currentPlayerIndex < gameState.players.length) {
+                // Local mode: show spin button
                 return (
                   <Button 
                     onClick={handleSpin} 
@@ -378,8 +478,10 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                     🎯 סובב!
                   </Button>
                 );
-              })()
-            )}
+              }
+              
+              return null;
+            })()}
             
             {isSpinning && (
               <div className="text-center space-y-4">
