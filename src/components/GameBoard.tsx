@@ -227,6 +227,32 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
               stateChanged = true;
             }
             
+            // Sync eliminated player state
+            if (serverState.eliminatedPlayer !== undefined) {
+              if (serverState.eliminatedPlayer === null || serverState.eliminatedPlayer === undefined) {
+                // Clear eliminated player
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (game as any).state.eliminatedPlayer = undefined;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (game as any).state.wrongElimination = false;
+                stateChanged = true;
+              } else {
+                // Set eliminated player
+                const eliminated = currentState.players.find(p => p.id === serverState.eliminatedPlayer.id);
+                if (eliminated && !eliminated.isEliminated) {
+                  eliminated.isEliminated = true;
+                  eliminated.votes = serverState.eliminatedPlayer.votes || 0;
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (game as any).state.eliminatedPlayer = eliminated;
+                  if (serverState.wrongElimination !== undefined) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    (game as any).state.wrongElimination = serverState.wrongElimination;
+                  }
+                  stateChanged = true;
+                }
+              }
+            }
+            
             if (stateChanged) {
               // Force a fresh state update with deep copy of players array
               const updatedState = game.getState();

@@ -403,76 +403,133 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             }
             
             // Sync votes from server
-            if (serverState.votes) {
+            if (serverState.votes !== undefined) {
               const currentState = game.getState();
-              // Reset all vote counts first
-              currentState.players.forEach(p => {
-                p.votes = 0;
-              });
               
-              Object.entries(serverState.votes).forEach(([voteKey, voteData]) => {
-                type VoteData = { voterId: number; targetId: number; voteType?: 'imposter' | 'other-word' };
-                const vote = voteData as VoteData;
-                const voter = currentState.players.find(p => p.id === vote.voterId);
-                if (voter) {
-                  // Apply vote from server
-                  if (currentState.gameMode === 'mixed' && vote.voteType) {
-                    if (vote.voteType === 'imposter' && voter.votedForImposter === undefined) {
-                      voter.votedForImposter = vote.targetId;
-                    } else if (vote.voteType === 'other-word' && voter.votedForOtherWord === undefined) {
-                      voter.votedForOtherWord = vote.targetId;
-                    }
-                    // Mark as voted if both votes are cast
-                    if (voter.votedForImposter !== undefined && voter.votedForOtherWord !== undefined) {
+              // If votes object is empty (revote), reset everything
+              if (Object.keys(serverState.votes).length === 0) {
+                currentState.players.forEach(p => {
+                  p.votes = 0;
+                  if (!p.isEliminated) {
+                    p.hasVoted = false;
+                    p.votedFor = undefined;
+                    p.votedForImposter = undefined;
+                    p.votedForOtherWord = undefined;
+                  }
+                });
+                stateChanged = true;
+              } else {
+                // Reset vote counts first, then apply votes from server
+                currentState.players.forEach(p => {
+                  p.votes = 0;
+                });
+                
+                // Apply votes from server
+                Object.entries(serverState.votes).forEach(([voteKey, voteData]) => {
+                  type VoteData = { voterId: number; targetId: number; voteType?: 'imposter' | 'other-word' };
+                  const vote = voteData as VoteData;
+                  const voter = currentState.players.find(p => p.id === vote.voterId);
+                  if (voter) {
+                    // Apply vote from server
+                    if (currentState.gameMode === 'mixed' && vote.voteType) {
+                      if (vote.voteType === 'imposter' && voter.votedForImposter === undefined) {
+                        voter.votedForImposter = vote.targetId;
+                      } else if (vote.voteType === 'other-word' && voter.votedForOtherWord === undefined) {
+                        voter.votedForOtherWord = vote.targetId;
+                      }
+                      // Mark as voted if both votes are cast
+                      if (voter.votedForImposter !== undefined && voter.votedForOtherWord !== undefined) {
+                        voter.hasVoted = true;
+                      }
+                    } else if (!vote.voteType && voter.votedFor === undefined) {
+                      voter.votedFor = vote.targetId;
                       voter.hasVoted = true;
                     }
-                  } else if (!vote.voteType && voter.votedFor === undefined) {
-                    voter.votedFor = vote.targetId;
-                    voter.hasVoted = true;
+                    
+                    // Update target player's vote count
+                    const target = currentState.players.find(p => p.id === vote.targetId);
+                    if (target) {
+                      if (target.votes === undefined) target.votes = 0;
+                      target.votes++;
+                    }
+                    
+                    stateChanged = true;
                   }
-                  
-                  // Update target player's vote count
-                  const target = currentState.players.find(p => p.id === vote.targetId);
-                  if (target) {
-                    if (target.votes === undefined) target.votes = 0;
-                    target.votes++;
-                  }
-                  
-                  stateChanged = true;
-                }
-              });
-            }
-            
-            // Sync voting results from server
-            if (serverState.isTie !== undefined && serverState.isTie && !showTieResults) {
-              setShowTieResults(true);
-              if (serverState.tiedPlayers) {
-                const currentState = game.getState();
-                const tiedPlayersFromServer = serverState.tiedPlayers.map((tp: { id: number; name: string; votes: number }) => {
-                  const player = currentState.players.find(p => p.id === tp.id);
-                  return player || { id: tp.id, name: tp.name, votes: tp.votes };
                 });
-                setTiedPlayers(tiedPlayersFromServer);
               }
             }
             
-            if (serverState.eliminatedPlayer && !showResults && !showWrongElimination && !showTieResults) {
-              const currentState = game.getState();
-              const eliminated = currentState.players.find(p => p.id === serverState.eliminatedPlayer.id);
-              if (eliminated) {
-                eliminated.isEliminated = true;
-                eliminated.votes = serverState.eliminatedPlayer.votes || 0;
-                setEliminatedPlayer(eliminated);
-                
-                if (serverState.wrongElimination) {
-                  setShowWrongElimination(true);
-                } else {
-                  setShowResults(true);
-                  if (eliminated.wordType === 'imposter' || eliminated.wordType === 'similar') {
-                    setShowConfetti(true);
-                  }
+            // Sync voting results from server
+            if (serverState.isTie !== undefined) {
+              if (serverState.isTie && !showTieResults) {
+                // Show tie results
+                setShowTieResults(true);
+                if (serverState.tiedPlayers) {
+                  const currentState = game.getState();
+                  const tiedPlayersFromServer = serverState.tiedPlayers.map((tp: { id: number; name: string; votes: number }) => {
+                    const player = currentState.players.find(p => p.id === tp.id);
+                    return player || { id: tp.id, name: tp.name, votes: tp.votes };
+                  });
+                  setTiedPlayers(tiedPlayersFromServer);
                 }
                 stateChanged = true;
+              } else if (!serverState.isTie && showTieResults) {
+                // Hide tie results (revote was triggered)
+                setShowTieResults(false);
+                setTiedPlayers([]);
+                // Reset votes in game state
+                const currentState = game.getState();
+                currentState.players.forEach(p => {
+                  if (!p.isEliminated) {
+                    p.votes = 0;
+                    p.hasVoted = false;
+                    p.votedFor = undefined;
+                    p.votedForImposter = undefined;
+                    p.votedForOtherWord = undefined;
+                  }
+                });
+                stateChanged = true;
+              }
+            }
+            
+            // Sync eliminated player state
+            if (serverState.eliminatedPlayer !== undefined) {
+              if (!serverState.eliminatedPlayer || serverState.eliminatedPlayer === null) {
+                // Clear eliminated player (continue after elimination)
+                setEliminatedPlayer(null);
+                setShowResults(false);
+                setShowWrongElimination(false);
+                const currentState = game.getState();
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (game as any).state.eliminatedPlayer = undefined;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (game as any).state.wrongElimination = false;
+                stateChanged = true;
+              } else if (!showResults && !showWrongElimination && !showTieResults) {
+                // Set eliminated player
+                const currentState = game.getState();
+                const eliminated = currentState.players.find(p => p.id === serverState.eliminatedPlayer.id);
+                if (eliminated) {
+                  eliminated.isEliminated = true;
+                  eliminated.votes = serverState.eliminatedPlayer.votes || 0;
+                  setEliminatedPlayer(eliminated);
+                  
+                  if (serverState.wrongElimination) {
+                    setShowWrongElimination(true);
+                  } else {
+                    setShowResults(true);
+                    if (eliminated.wordType === 'imposter' || eliminated.wordType === 'similar') {
+                      setShowConfetti(true);
+                    }
+                  }
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (game as any).state.eliminatedPlayer = eliminated;
+                  if (serverState.wrongElimination !== undefined) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    (game as any).state.wrongElimination = serverState.wrongElimination;
+                  }
+                  stateChanged = true;
+                }
               }
             }
             
@@ -523,7 +580,45 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     return () => clearInterval(interval);
   }, [game, showResults, tiedPlayers, handleCalculateResults, showTieResults, showWrongElimination]);
 
-  const handleContinueAfterElimination = () => {
+  const handleContinueAfterElimination = async () => {
+    // Clear eliminated player state and continue
+    const newState = game.getState();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (game as any).state.eliminatedPlayer = undefined;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (game as any).state.wrongElimination = false;
+    const updatedState = game.getState();
+    setGameState(updatedState);
+    
+    // Sync continue after elimination to server
+    if (roomId && gameState.isOnline) {
+      try {
+        await fetch('/api/rooms/game-state', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            roomId,
+            gameStateData: {
+              currentPlayerIndex: updatedState.currentPlayerIndex,
+              votingPhase: updatedState.votingPhase,
+              votingActivated: updatedState.votingActivated,
+              wrongElimination: false,
+              eliminatedPlayer: undefined,
+              votes: {},
+              playerWords: updatedState.players.reduce((acc, p) => {
+                if (p.currentWord) {
+                  acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
+                }
+                return acc;
+              }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
+            }
+          })
+        });
+      } catch (error) {
+        console.error('Error syncing continue after elimination:', error);
+      }
+    }
+    
     onVoteComplete();
   };
 
