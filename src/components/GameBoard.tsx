@@ -6,6 +6,7 @@ import { WordGame } from '@/lib/gameLogic';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import VotingPhase from './VotingPhase';
+import PlayerAvatar from './PlayerAvatar';
 
 interface GameBoardProps {
   game: WordGame;
@@ -224,9 +225,12 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
             </div>
             
             {getCurrentPlayer() && (
-              <div className="text-center p-3 bg-blue-50 rounded-lg">
-                <p className="text-sm text-muted-foreground">תור של:</p>
-                <p className="text-lg font-semibold">{getCurrentPlayer()?.name}</p>
+              <div className="text-center p-4 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg flex items-center justify-center gap-3">
+                <PlayerAvatar name={getCurrentPlayer()!.name} size="md" isActive={true} />
+                <div>
+                  <p className="text-sm text-muted-foreground">תור של:</p>
+                  <p className="text-lg font-semibold">{getCurrentPlayer()?.name}</p>
+                </div>
               </div>
             )}
             

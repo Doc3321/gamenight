@@ -12,6 +12,7 @@ import JoinRoom from '@/components/JoinRoom';
 import RoomLobby from '@/components/RoomLobby';
 import GameSetup from '@/components/GameSetup';
 import { Player as GamePlayer } from '@/lib/gameLogic';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 type AppMode = 'local' | 'online';
 
@@ -154,7 +155,10 @@ export default function Home() {
   // Online mode - show join/create room
   if (appMode === 'online' && !room) {
   return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 dark:from-gray-900 dark:via-purple-900 dark:to-gray-800 p-4">
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 dark:from-gray-900 dark:via-purple-900 dark:to-gray-800 p-4 relative">
+        <div className="absolute top-4 left-4 z-10">
+          <ThemeToggle />
+        </div>
         <div className="max-w-4xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -171,7 +175,10 @@ export default function Home() {
   // Online mode - show room lobby
   if (appMode === 'online' && room && !game) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 dark:from-gray-900 dark:via-purple-900 dark:to-gray-800 p-4">
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 dark:from-gray-900 dark:via-purple-900 dark:to-gray-800 p-4 relative">
+        <div className="absolute top-4 left-4 z-10">
+          <ThemeToggle />
+        </div>
         <div className="max-w-4xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -204,7 +211,10 @@ export default function Home() {
   // Local mode - show topic selection
   if (!gameStarted && appMode === 'local') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 dark:from-gray-900 dark:via-purple-900 dark:to-gray-800 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 dark:from-gray-900 dark:via-purple-900 dark:to-gray-800 flex items-center justify-center p-4 relative">
+        <div className="absolute top-4 left-4">
+          <ThemeToggle />
+        </div>
         <motion.div
           initial={{ opacity: 0, y: 50, scale: 0.9 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -301,7 +311,10 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 dark:from-gray-900 dark:via-purple-900 dark:to-gray-800">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 dark:from-gray-900 dark:via-purple-900 dark:to-gray-800 relative">
+      <div className="absolute top-4 left-4 z-10">
+        <ThemeToggle />
+      </div>
       <div className="container mx-auto px-4 py-8">
         <motion.div 
           initial={{ opacity: 0, y: -30 }}

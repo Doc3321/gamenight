@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Copy, Users, Play, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
+import PlayerAvatar from './PlayerAvatar';
 
 interface Player {
   id: string;
@@ -154,23 +155,28 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
             {room.players.map((player) => (
               <div
                 key={player.id}
-                className="flex items-center justify-between p-3 bg-muted rounded-lg"
+                className="flex items-center justify-between p-3 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg border-2 border-transparent hover:border-purple-300 dark:hover:border-purple-600 transition-all"
               >
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{player.name}</span>
-                  {player.isHost && (
-                    <Badge variant="default" className="text-xs">
-                      מארח
-                    </Badge>
-                  )}
+                <div className="flex items-center gap-3">
+                  <PlayerAvatar name={player.name} size="md" />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{player.name}</span>
+                      {player.isHost && (
+                        <Badge variant="default" className="text-xs bg-gradient-to-r from-purple-600 to-pink-600">
+                          👑 מארח
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
                 </div>
                 {player.isReady ? (
-                  <Badge variant="outline" className="text-green-600">
-                    מוכן
+                  <Badge variant="outline" className="text-green-600 border-green-500 bg-green-50 dark:bg-green-900/20">
+                    ✓ מוכן
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="text-gray-400">
-                    לא מוכן
+                    ⏳ לא מוכן
                   </Badge>
                 )}
               </div>

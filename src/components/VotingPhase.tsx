@@ -5,6 +5,10 @@ import { motion } from 'framer-motion';
 import { WordGame, Player } from '@/lib/gameLogic';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import EmotePicker, { EmoteType } from './EmotePicker';
+import EmoteDisplay from './EmoteDisplay';
+import Confetti from './Confetti';
+import PlayerAvatar from './PlayerAvatar';
 
 interface VotingPhaseProps {
   game: WordGame;
@@ -24,6 +28,8 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   const [tiedPlayers, setTiedPlayers] = useState<Player[]>([]);
   const [showTieResults, setShowTieResults] = useState(false);
   const [showWrongElimination, setShowWrongElimination] = useState(false);
+  const [activeEmotes, setActiveEmotes] = useState<Array<{ id: number; emote: EmoteType; playerName: string }>>([]);
+  const [showConfetti, setShowConfetti] = useState(false);
 
   const handleVote = (voteType?: 'imposter' | 'other-word') => {
     const target = voteType 
@@ -45,6 +51,19 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     }
   };
 
+  const handleEmote = (emote: EmoteType) => {
+    const currentPlayer = gameState.players.find(p => p.id === currentPlayerId);
+    if (currentPlayer) {
+      const emoteId = Date.now();
+      setActiveEmotes(prev => [...prev, { id: emoteId, emote, playerName: currentPlayer.name }]);
+      
+      // Remove emote after animation
+      setTimeout(() => {
+        setActiveEmotes(prev => prev.filter(e => e.id !== emoteId));
+      }, 2000);
+    }
+  };
+
   const handleCalculateResults = useCallback(() => {
     const result = game.calculateVotingResult();
     setGameState(game.getState());
@@ -59,7 +78,10 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       setShowWrongElimination(true);
       setEliminatedPlayer(result.eliminated);
     } else {
-      // Correct elimination
+      // Correct elimination - show confetti if imposter/other word found
+      if (result.eliminated && (result.eliminated.wordType === 'imposter' || result.eliminated.wordType === 'similar')) {
+        setShowConfetti(true);
+      }
       setShowResults(true);
       setEliminatedPlayer(result.eliminated);
     }
@@ -267,9 +289,11 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       : eliminationType === 'similar' 
         ? 'מילה דומה' 
         : 'רגיל';
+    const isCorrectElimination = eliminationType === 'imposter' || eliminationType === 'similar';
     
     return (
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-2xl mx-auto relative">
+        {isCorrectElimination && <Confetti trigger={showConfetti} onComplete={() => setShowConfetti(false)} />}
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -280,6 +304,9 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               <CardTitle className="text-3xl text-red-600">השחקן הודח!</CardTitle>
             </CardHeader>
             <CardContent className="text-center space-y-4">
+              <div className="flex justify-center mb-4">
+                <PlayerAvatar name={eliminatedPlayer.name} size="lg" isEliminated={true} />
+              </div>
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
@@ -288,6 +315,16 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               >
                 {eliminatedPlayer.name}
               </motion.div>
+              {isCorrectElimination && (
+                <motion.div
+                  initial={{ scale: 0, rotate: -180 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={{ delay: 0.4, type: "spring" }}
+                  className="text-6xl mb-4"
+                >
+                  🎉
+                </motion.div>
+              )}
               <div className="space-y-2">
                 <p className="text-lg">קיבל {eliminatedPlayer.votes} קולות</p>
                 {isBothMode && (
@@ -349,9 +386,15 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
         </CardHeader>
         <CardContent>
           {/* Current Player Info */}
-          <div className="mb-6 p-4 bg-blue-50 rounded-lg text-center">
-            <p className="text-sm text-muted-foreground">השחקן שלך:</p>
-            <p className="text-xl font-bold">{currentPlayer?.name}</p>
+          <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg text-center">
+            <div className="flex items-center justify-center gap-3 mb-2">
+              <PlayerAvatar name={currentPlayer?.name || ''} size="md" isActive={true} />
+              <div>
+                <p className="text-sm text-muted-foreground">השחקן שלך:</p>
+                <p className="text-xl font-bold">{currentPlayer?.name}</p>
+              </div>
+              <EmotePicker onEmoteSelect={handleEmote} />
+            </div>
             {bothVotesComplete && (
               <p className="text-sm text-green-600 mt-2">✓ הצבעת</p>
             )}
@@ -384,15 +427,16 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                       <motion.button
                         key={player.id}
                         onClick={() => setSelectedImposterTarget(player.id)}
-                        className={`p-4 border-2 rounded-lg transition-all ${
+                        className={`p-4 border-2 rounded-xl transition-all flex flex-col items-center gap-2 ${
                           selectedImposterTarget === player.id
-                            ? 'border-red-500 bg-red-100 scale-105'
-                            : 'border-gray-200 hover:border-gray-300'
+                            ? 'border-red-500 bg-gradient-to-br from-red-100 to-orange-100 dark:from-red-900/30 dark:to-orange-900/30 scale-105 shadow-lg'
+                            : 'border-gray-200 dark:border-gray-700 hover:border-red-300 dark:hover:border-red-600'
                         }`}
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                         disabled={selectedOtherWordTarget === player.id}
                       >
+                        <PlayerAvatar name={player.name} size="md" isEliminated={player.isEliminated} />
                         <div className="font-semibold">{player.name}</div>
                         {selectedOtherWordTarget === player.id && (
                           <div className="text-xs text-muted-foreground mt-1">
@@ -424,15 +468,16 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                       <motion.button
                         key={player.id}
                         onClick={() => setSelectedOtherWordTarget(player.id)}
-                        className={`p-4 border-2 rounded-lg transition-all ${
+                        className={`p-4 border-2 rounded-xl transition-all flex flex-col items-center gap-2 ${
                           selectedOtherWordTarget === player.id
-                            ? 'border-blue-500 bg-blue-100 scale-105'
-                            : 'border-gray-200 hover:border-gray-300'
+                            ? 'border-blue-500 bg-gradient-to-br from-blue-100 to-cyan-100 dark:from-blue-900/30 dark:to-cyan-900/30 scale-105 shadow-lg'
+                            : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600'
                         }`}
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                         disabled={selectedImposterTarget === player.id}
                       >
+                        <PlayerAvatar name={player.name} size="md" isEliminated={player.isEliminated} />
                         <div className="font-semibold">{player.name}</div>
                         {selectedImposterTarget === player.id && (
                           <div className="text-xs text-muted-foreground mt-1">
@@ -461,28 +506,29 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               <h3 className="text-lg font-semibold text-center mb-4">
                 בחר שחקן להדחה:
               </h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {playersToShow.map((player) => (
-                  <motion.button
-                    key={player.id}
-                    onClick={() => setSelectedTarget(player.id)}
-                    className={`p-4 border-2 rounded-lg transition-all ${
-                      selectedTarget === player.id
-                        ? 'border-primary bg-primary/10 scale-105'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <div className="font-semibold">{player.name}</div>
-                    {showVoteCounts && player.votes !== undefined && player.votes > 0 && (
-                      <div className="text-sm text-muted-foreground mt-1">
-                        {player.votes} קולות
-                      </div>
-                    )}
-                  </motion.button>
-                ))}
-              </div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {playersToShow.map((player) => (
+                      <motion.button
+                        key={player.id}
+                        onClick={() => setSelectedTarget(player.id)}
+                        className={`p-4 border-2 rounded-xl transition-all flex flex-col items-center gap-2 ${
+                          selectedTarget === player.id
+                            ? 'border-purple-500 bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 scale-105 shadow-lg'
+                            : 'border-gray-200 dark:border-gray-700 hover:border-purple-300 dark:hover:border-purple-600'
+                        }`}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        <PlayerAvatar name={player.name} size="md" isEliminated={player.isEliminated} />
+                        <div className="font-semibold">{player.name}</div>
+                        {showVoteCounts && player.votes !== undefined && player.votes > 0 && (
+                          <div className="text-sm text-muted-foreground mt-1">
+                            {player.votes} קולות
+                          </div>
+                        )}
+                      </motion.button>
+                    ))}
+                  </div>
               
               <Button
                 onClick={() => handleVote()}
@@ -541,13 +587,12 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                       ? player.hasVoted && player.votedForImposter !== undefined && player.votedForOtherWord !== undefined
                       : player.hasVoted;
                     return (
-                      <div
-                        key={player.id}
-                        className={`w-3 h-3 rounded-full ${
+                      <div key={player.id} className="flex flex-col items-center gap-1" title={player.name}>
+                        <PlayerAvatar name={player.name} size="sm" />
+                        <div className={`w-2 h-2 rounded-full ${
                           playerVoted ? 'bg-green-500' : 'bg-gray-300'
-                        }`}
-                        title={player.name}
-                      />
+                        }`} />
+                      </div>
                     );
                   })}
                 </div>
