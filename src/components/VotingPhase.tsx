@@ -406,8 +406,13 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             if (serverState.votes !== undefined) {
               const currentState = game.getState();
               
-              // If votes object is empty (revote), reset everything
+              // If votes object is empty (revote), reset everything and hide tie screen
               if (Object.keys(serverState.votes).length === 0) {
+                // Hide tie screen if it's showing (revote was triggered)
+                if (showTieResults) {
+                  setShowTieResults(false);
+                  setTiedPlayers([]);
+                }
                 currentState.players.forEach(p => {
                   p.votes = 0;
                   if (!p.isEliminated) {
@@ -465,12 +470,13 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               }
             }
             
-            // Sync voting results from server
+            // Sync voting results from server - tie state
             if (serverState.isTie !== undefined) {
-              if (serverState.isTie && !showTieResults) {
+              const shouldShowTie = serverState.isTie === true;
+              if (shouldShowTie && !showTieResults) {
                 // Show tie results
                 setShowTieResults(true);
-                if (serverState.tiedPlayers) {
+                if (serverState.tiedPlayers && Array.isArray(serverState.tiedPlayers)) {
                   const currentState = game.getState();
                   const tiedPlayersFromServer = serverState.tiedPlayers.map((tp: { id: number; name: string; votes: number }) => {
                     const player = currentState.players.find(p => p.id === tp.id);
@@ -479,8 +485,8 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                   setTiedPlayers(tiedPlayersFromServer);
                 }
                 stateChanged = true;
-              } else if (!serverState.isTie && showTieResults) {
-                // Hide tie results (revote was triggered)
+              } else if (!shouldShowTie && showTieResults) {
+                // Hide tie results (revote was triggered) - this is the key fix
                 setShowTieResults(false);
                 setTiedPlayers([]);
                 // Reset votes in game state
@@ -494,6 +500,11 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                     p.votedForOtherWord = undefined;
                   }
                 });
+                // Also clear any eliminated player state if it exists
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (game as any).state.eliminatedPlayer = undefined;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (game as any).state.wrongElimination = false;
                 stateChanged = true;
               }
             }
@@ -570,7 +581,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     
     const interval = setInterval(syncGameState, 500); // Poll every 500ms for faster updates
     return () => clearInterval(interval);
-  }, [roomId, gameState.isOnline, gameState.players, gameState.votingActivated, gameState.votingPhase, game]);
+  }, [roomId, gameState.isOnline, gameState.players, gameState.votingActivated, gameState.votingPhase, game, showTieResults]);
 
   useEffect(() => {
     const interval = setInterval(() => {
