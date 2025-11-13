@@ -203,18 +203,16 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
             ))}
           </div>
           
-          {!isHost && (
-            <div className="mt-4">
-              <Button
-                onClick={handleToggleReady}
-                disabled={isTogglingReady}
-                variant={currentPlayer?.isReady ? 'outline' : 'default'}
-                className="w-full"
-              >
-                {currentPlayer?.isReady ? 'לא מוכן' : 'מוכן'}
-              </Button>
-            </div>
-          )}
+          <div className="mt-4">
+            <Button
+              onClick={handleToggleReady}
+              disabled={isTogglingReady}
+              variant={currentPlayer?.isReady ? 'outline' : 'default'}
+              className="w-full"
+            >
+              {currentPlayer?.isReady ? 'לא מוכן' : 'מוכן'}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
