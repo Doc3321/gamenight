@@ -112,9 +112,19 @@ export class RoomManager {
     return roomId ? this.rooms.get(roomId) || null : null;
   }
 
+  getOpenRooms(): GameRoom[] {
+    // Return all rooms that are waiting for players
+    return Array.from(this.rooms.values()).filter(room => room.gameState === 'waiting');
+  }
+
   startGame(roomId: string, topic: string, gameMode: GameMode): GameRoom | null {
     const room = this.rooms.get(roomId);
     if (!room || room.players.length < 2) return null;
+    
+    // Check if all players are ready
+    if (!room.players.every(p => p.isReady)) {
+      return null;
+    }
 
     // Select random word from topic
     const words = this.getWordsForTopic(topic);

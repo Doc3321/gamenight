@@ -48,10 +48,10 @@ export default function Home() {
   const [room, setRoom] = useState<GameRoom | null>(null);
   const [currentPlayerId, setCurrentPlayerId] = useState<string>('');
 
-  const startNewGame = (gameMode: GameModeType = 'similar-word', players: GamePlayer[] = []) => {
+  const startNewGame = (gameMode: GameModeType = 'similar-word', players: GamePlayer[] = [], isOnline: boolean = false) => {
     const topic = wordTopics.find(t => t.id === selectedTopic);
     if (topic) {
-      const newGame = new WordGame(topic, gameMode, players);
+      const newGame = new WordGame(topic, gameMode, players, isOnline);
       setGame(newGame);
       setGameStarted(true);
       setShowSetup(false);
@@ -129,11 +129,16 @@ export default function Home() {
       const data = await response.json();
       if (data.room) {
         setRoom(data.room);
-        // Start local game with the same topic and mode
+        // Start local game with the same topic and mode, but mark as online
         const topicData = wordTopics.find(t => t.id === topic);
         if (topicData) {
           setSelectedTopic(topic);
-          startNewGame(gameMode);
+          // Convert room players to game players
+          const gamePlayers: GamePlayer[] = data.room.players.map((p: { id: string; name: string; isHost: boolean; isReady: boolean }, index: number) => ({
+            id: index + 1,
+            name: p.name
+          }));
+          startNewGame(gameMode, gamePlayers, true); // isOnline = true
         }
       }
     } catch (error) {
@@ -306,7 +311,17 @@ export default function Home() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3, duration: 0.6 }}
         >
-          <GameBoard game={game!} onReset={resetGame} />
+          <GameBoard 
+            game={game!} 
+            onReset={resetGame} 
+            isAdmin={appMode === 'online' && room?.hostId === currentPlayerId}
+            currentPlayerId={appMode === 'online' && room 
+              ? game!.getState().players.findIndex(p => {
+                  const roomPlayer = room.players.find(rp => rp.id === currentPlayerId);
+                  return roomPlayer && p.name === roomPlayer.name;
+                }) + 1
+              : undefined}
+          />
         </motion.div>
       </div>
     </div>

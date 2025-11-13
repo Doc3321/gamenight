@@ -10,9 +10,11 @@ import VotingPhase from './VotingPhase';
 interface GameBoardProps {
   game: WordGame;
   onReset: () => void;
+  isAdmin?: boolean; // For online mode
+  currentPlayerId?: number; // For online mode - the game player ID of current viewer
 }
 
-export default function GameBoard({ game, onReset }: GameBoardProps) {
+export default function GameBoard({ game, onReset, isAdmin = false, currentPlayerId: viewingPlayerId }: GameBoardProps) {
   const [isSpinning, setIsSpinning] = useState(false);
   const [gameState, setGameState] = useState(game.getState());
   const [showResult, setShowResult] = useState(false);
@@ -110,25 +112,44 @@ export default function GameBoard({ game, onReset }: GameBoardProps) {
 
   // Show voting phase if all players have received words
   if (gameState.votingPhase && gameState.currentPlayerIndex >= gameState.players.length) {
-    // Find the next player who hasn't voted
-    const activePlayers = gameState.players.filter(p => !p.isEliminated);
-    const nextVoter = activePlayers.find(p => !p.hasVoted);
-    
-    if (nextVoter) {
-      // Update current voting player index
-      const voterIndex = gameState.players.findIndex(p => p.id === nextVoter.id);
-      if (voterIndex !== currentVotingPlayerIndex) {
-        setCurrentVotingPlayerIndex(voterIndex);
+    // For online mode, show voting to current viewing player
+    // For local mode, show voting to next player who hasn't voted
+    if (gameState.isOnline && viewingPlayerId) {
+      const viewingPlayer = gameState.players.find(p => p.id === viewingPlayerId);
+      if (viewingPlayer && !viewingPlayer.isEliminated) {
+        return (
+          <VotingPhase
+            game={game}
+            currentPlayerId={viewingPlayerId}
+            onVoteComplete={handleVoteComplete}
+            isAdmin={isAdmin}
+          />
+        );
       }
+    } else {
+      // Local mode: sequential voting
+      const activePlayers = gameState.players.filter(p => !p.isEliminated);
+      const nextVoter = activePlayers.find(p => !p.hasVoted);
       
-      return (
-        <VotingPhase
-          game={game}
-          currentPlayerId={nextVoter.id}
-          onVoteComplete={handleVoteComplete}
-        />
-      );
-    } else if (gameState.eliminatedPlayer) {
+      if (nextVoter) {
+        // Update current voting player index
+        const voterIndex = gameState.players.findIndex(p => p.id === nextVoter.id);
+        if (voterIndex !== currentVotingPlayerIndex) {
+          setCurrentVotingPlayerIndex(voterIndex);
+        }
+        
+        return (
+          <VotingPhase
+            game={game}
+            currentPlayerId={nextVoter.id}
+            onVoteComplete={handleVoteComplete}
+            isAdmin={isAdmin}
+          />
+        );
+      }
+    }
+    
+    if (gameState.eliminatedPlayer) {
       // All voted and eliminated player is set, show results
       return (
         <div className="max-w-2xl mx-auto">
@@ -211,9 +232,28 @@ export default function GameBoard({ game, onReset }: GameBoardProps) {
             )}
             
             {!showResult && !isSpinning && !gameState.selectedWord && gameState.currentPlayerIndex < gameState.players.length && (
-              <Button onClick={handleSpin} className="w-full" size="lg">
-                סובב! 🎯
-              </Button>
+              (() => {
+                // For online mode, only show spin button if it's viewing player's turn
+                if (gameState.isOnline && viewingPlayerId) {
+                  const currentSpinningPlayer = gameState.players[gameState.currentPlayerIndex];
+                  const isMyTurn = currentSpinningPlayer && currentSpinningPlayer.id === viewingPlayerId;
+                  if (!isMyTurn) {
+                    return (
+                      <div className="text-center text-muted-foreground">
+                        <p>ממתין לתורך...</p>
+                        {currentSpinningPlayer && (
+                          <p className="text-sm mt-2">תור של: {currentSpinningPlayer.name}</p>
+                        )}
+                      </div>
+                    );
+                  }
+                }
+                return (
+                  <Button onClick={handleSpin} className="w-full" size="lg">
+                    סובב! 🎯
+                  </Button>
+                );
+              })()
             )}
             
             {isSpinning && (
@@ -232,27 +272,67 @@ export default function GameBoard({ game, onReset }: GameBoardProps) {
           </CardHeader>
           <CardContent>
             <AnimatePresence mode="wait">
-              {gameState.selectedWord ? (
-                <motion.div 
-                  key="selected-word"
-                  initial={{ opacity: 0, y: 20, scale: 0.8 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -20, scale: 0.8 }}
-                  transition={{ duration: 0.6, type: "spring" }}
-                  className="text-center"
-                >
-                  <div className="p-6 bg-primary/10 rounded-lg text-center text-2xl font-bold border-2 border-primary/20 hover:bg-primary/20 transition-colors">
-                    {gameState.currentChoices[0] || gameState.selectedWord}
-                  </div>
-                  {gameState.currentChoices[0] && (
-                    <div className="mt-4 text-center">
-                      <p className="text-sm text-muted-foreground">
-                        המילה שלך
-                      </p>
-                    </div>
-                  )}
-                </motion.div>
-              ) : (
+              {(() => {
+                // For online mode, check if it's the viewing player's turn
+                const currentSpinningPlayerIndex = gameState.currentPlayerIndex;
+                const currentSpinningPlayer = gameState.players[currentSpinningPlayerIndex];
+                const viewingPlayer = viewingPlayerId 
+                  ? gameState.players.find(p => p.id === viewingPlayerId)
+                  : gameState.players[gameState.currentPlayerIndex - 1];
+                
+                // Check if viewing player has received their word
+                const hasMyWord = viewingPlayer?.currentWord !== undefined;
+                const isMyTurn = gameState.isOnline 
+                  ? currentSpinningPlayer && viewingPlayer && currentSpinningPlayer.id === viewingPlayer.id
+                  : true; // Local mode always shows
+                
+                if (gameState.isOnline && !hasMyWord && currentSpinningPlayerIndex < gameState.players.length) {
+                  // Online mode: waiting for my turn or it's someone else's turn
+                  if (!isMyTurn && currentSpinningPlayer) {
+                    return (
+                      <motion.div 
+                        key="waiting"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="text-center text-muted-foreground py-8"
+                      >
+                        <p>ממתין לתורך...</p>
+                        <p className="text-sm mt-2">
+                          תור של: {currentSpinningPlayer.name}
+                        </p>
+                      </motion.div>
+                    );
+                  }
+                }
+                
+                // Show word if: local mode OR it's my turn OR I already have my word
+                if (gameState.selectedWord && (!gameState.isOnline || isMyTurn || hasMyWord)) {
+                  const wordToShow = viewingPlayer?.currentWord || gameState.currentChoices[0] || gameState.selectedWord;
+                  return (
+                    <motion.div 
+                      key="selected-word"
+                      initial={{ opacity: 0, y: 20, scale: 0.8 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -20, scale: 0.8 }}
+                      transition={{ duration: 0.6, type: "spring" }}
+                      className="text-center"
+                    >
+                      <div className="p-6 bg-primary/10 rounded-lg text-center text-2xl font-bold border-2 border-primary/20 hover:bg-primary/20 transition-colors">
+                        {wordToShow}
+                      </div>
+                      {(gameState.currentChoices[0] || viewingPlayer?.currentWord) && (
+                        <div className="mt-4 text-center">
+                          <p className="text-sm text-muted-foreground">
+                            המילה שלך
+                          </p>
+                        </div>
+                      )}
+                    </motion.div>
+                  );
+                }
+                
+                return (
                 <motion.div 
                   key="placeholder"
                   initial={{ opacity: 0 }}

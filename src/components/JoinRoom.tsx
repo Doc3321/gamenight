@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,21 +12,51 @@ interface JoinRoomProps {
   onCreateRoom: (playerName: string) => void;
 }
 
+interface OpenRoom {
+  id: string;
+  hostId: string;
+  players: Array<{ id: string; name: string; isHost: boolean; isReady: boolean }>;
+  gameState: string;
+  createdAt: Date;
+}
+
 export default function JoinRoom({ onJoinRoom, onCreateRoom }: JoinRoomProps) {
   const [roomId, setRoomId] = useState('');
   const [playerName, setPlayerName] = useState('');
   const [isJoining, setIsJoining] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [openRooms, setOpenRooms] = useState<OpenRoom[]>([]);
 
-  const handleJoinRoom = async () => {
-    if (!roomId.trim() || !playerName.trim()) {
+  useEffect(() => {
+    // Fetch open rooms periodically
+    const fetchRooms = async () => {
+      try {
+        const response = await fetch('/api/rooms?list=true');
+        const data = await response.json();
+        if (data.rooms) {
+          setOpenRooms(data.rooms);
+        }
+      } catch (error) {
+        console.error('Error fetching rooms:', error);
+      }
+    };
+
+    fetchRooms();
+    const interval = setInterval(fetchRooms, 2000); // Refresh every 2 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleJoinRoom = async (roomIdToJoin?: string) => {
+    const targetRoomId = roomIdToJoin || roomId.trim();
+    if (!targetRoomId || !playerName.trim()) {
       toast.error('נא למלא את כל השדות');
       return;
     }
 
     setIsJoining(true);
     try {
-      await onJoinRoom(roomId.trim().toUpperCase(), playerName.trim());
+      await onJoinRoom(targetRoomId.toUpperCase(), playerName.trim());
     } catch {
       toast.error('שגיאה בהצטרפות לחדר');
     } finally {
@@ -51,7 +81,42 @@ export default function JoinRoom({ onJoinRoom, onCreateRoom }: JoinRoomProps) {
   };
 
   return (
-    <div className="max-w-md mx-auto p-6 space-y-6">
+    <div className="max-w-2xl mx-auto p-6 space-y-6">
+      {/* Open Rooms List */}
+      {openRooms.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl text-center">חדרים פתוחים להצטרפות</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {openRooms.map((room) => (
+                <div
+                  key={room.id}
+                  className="flex justify-between items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                  onClick={() => {
+                    setRoomId(room.id);
+                    if (playerName.trim()) {
+                      handleJoinRoom(room.id);
+                    }
+                  }}
+                >
+                  <div>
+                    <p className="font-semibold">חדר {room.id}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {room.players.length} שחקנים
+                    </p>
+                  </div>
+                  <Button size="sm" variant="outline">
+                    הצטרף
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="text-2xl text-center">הצטרף לחדר</CardTitle>
@@ -80,7 +145,7 @@ export default function JoinRoom({ onJoinRoom, onCreateRoom }: JoinRoomProps) {
           </div>
           
           <Button
-            onClick={handleJoinRoom}
+            onClick={() => handleJoinRoom()}
             disabled={isJoining || !roomId.trim() || !playerName.trim()}
             className="w-full"
             size="lg"

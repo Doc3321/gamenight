@@ -21,7 +21,15 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const roomId = searchParams.get('roomId');
+    const list = searchParams.get('list');
     
+    // If list=true, return all open rooms
+    if (list === 'true') {
+      const openRooms = roomManager.getOpenRooms();
+      return NextResponse.json({ rooms: openRooms });
+    }
+    
+    // Otherwise, get specific room
     if (!roomId) {
       return NextResponse.json({ error: 'Missing roomId' }, { status: 400 });
     }

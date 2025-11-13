@@ -9,7 +9,9 @@ export interface Player {
   wordType?: 'normal' | 'similar' | 'imposter';
   votes?: number; // Number of votes received
   hasVoted?: boolean; // Whether this player has voted
-  votedFor?: number; // ID of player this player voted for
+  votedFor?: number; // ID of player this player voted for (for normal voting)
+  votedForImposter?: number; // ID of player voted for as imposter (for both mode)
+  votedForOtherWord?: number; // ID of player voted for as other word (for both mode)
   isEliminated?: boolean; // Whether player is eliminated
 }
 
@@ -29,6 +31,11 @@ export interface GameState {
   votingPhase: boolean; // Whether we're in voting phase
   votingRound: number; // Current voting round (for tie-breaking)
   eliminatedPlayer?: Player; // The eliminated player
+  isOnline: boolean; // Whether this is an online game
+  votingActivated: boolean; // Whether voting has been activated (for online mode)
+  showVoteCounts: boolean; // Whether to show vote counts (false for online, true for local)
+  wrongElimination: boolean; // Whether the eliminated player was wrong (not imposter/other word)
+  canRevote: boolean; // Whether admin can trigger revote (for ties)
 }
 
 export interface SpinResult {
@@ -42,7 +49,7 @@ export class WordGame {
   private state: GameState;
   private usedWords: Set<string> = new Set();
 
-  constructor(topic: WordTopic, gameMode: GameMode = 'similar-word', players: Player[] = []) {
+  constructor(topic: WordTopic, gameMode: GameMode = 'similar-word', players: Player[] = [], isOnline: boolean = false) {
     // Select 1 random word for the entire game
     const gameWord = topic.words[Math.floor(Math.random() * topic.words.length)];
     
@@ -97,7 +104,12 @@ export class WordGame {
       currentPlayerIndex: 0,
       votingPhase: false,
       votingRound: 1,
-      eliminatedPlayer: undefined
+      eliminatedPlayer: undefined,
+      isOnline,
+      votingActivated: false,
+      showVoteCounts: !isOnline, // Show votes in local mode, hide in online
+      wrongElimination: false,
+      canRevote: false
     };
   }
 
@@ -167,11 +179,21 @@ export class WordGame {
         p.votes = 0;
         p.hasVoted = false;
         p.votedFor = undefined;
+        p.votedForImposter = undefined;
+        p.votedForOtherWord = undefined;
       }
     });
   }
 
-  public castVote(voterId: number, targetId: number): boolean {
+  public activateVoting(): void {
+    // For online mode, admin must activate voting
+    if (this.state.isOnline) {
+      this.state.votingActivated = true;
+      this.startVotingPhase();
+    }
+  }
+
+  public castVote(voterId: number, targetId: number, voteType?: 'imposter' | 'other-word'): boolean {
     const voter = this.state.players.find(p => p.id === voterId);
     const target = this.state.players.find(p => p.id === targetId);
 
@@ -179,11 +201,34 @@ export class WordGame {
     if (!voter || !target) return false;
     if (voter.isEliminated || target.isEliminated) return false;
     if (voterId === targetId) return false; // Can't vote for yourself
-    if (voter.hasVoted) return false; // Already voted
+    
+    // For both mode, check if already voted for this person in this type
+    if (this.state.gameMode === 'mixed' && voteType) {
+      if (voteType === 'imposter' && voter.votedForImposter === targetId) return false;
+      if (voteType === 'other-word' && voter.votedForOtherWord === targetId) return false;
+    } else {
+      // Normal voting - can't vote if already voted
+      if (voter.hasVoted) return false;
+    }
 
     // Cast vote
-    voter.hasVoted = true;
-    voter.votedFor = targetId;
+    if (this.state.gameMode === 'mixed' && voteType) {
+      // Both mode: separate votes for imposter and other word
+      if (voteType === 'imposter') {
+        voter.votedForImposter = targetId;
+      } else if (voteType === 'other-word') {
+        voter.votedForOtherWord = targetId;
+      }
+      // Mark as voted only if both votes are cast
+      if (voter.votedForImposter !== undefined && voter.votedForOtherWord !== undefined) {
+        voter.hasVoted = true;
+      }
+    } else {
+      // Normal voting
+      voter.hasVoted = true;
+      voter.votedFor = targetId;
+    }
+    
     if (target.votes === undefined) target.votes = 0;
     target.votes!++;
 
@@ -204,19 +249,31 @@ export class WordGame {
       const tiedPlayers = this.state.players.filter(p => 
         tiedPlayerIds.includes(p.id) && !p.isEliminated
       );
+      if (this.state.gameMode === 'mixed') {
+        // Both mode: need both votes
+        return tiedPlayers.length > 0 && tiedPlayers.every(p => 
+          p.hasVoted && p.votedForImposter !== undefined && p.votedForOtherWord !== undefined
+        );
+      }
       return tiedPlayers.length > 0 && tiedPlayers.every(p => p.hasVoted);
     }
     
     // Normal voting - all active players must vote
     const activePlayers = this.state.players.filter(p => !p.isEliminated);
+    if (this.state.gameMode === 'mixed') {
+      // Both mode: need both votes
+      return activePlayers.length > 0 && activePlayers.every(p => 
+        p.hasVoted && p.votedForImposter !== undefined && p.votedForOtherWord !== undefined
+      );
+    }
     return activePlayers.length > 0 && activePlayers.every(p => p.hasVoted);
   }
 
-  public calculateVotingResult(): { eliminated: Player | null; isTie: boolean; tiedPlayers: Player[] } {
+  public calculateVotingResult(): { eliminated: Player | null; isTie: boolean; tiedPlayers: Player[]; wasWrong: boolean } {
     const results = this.getVotingResults();
     
     if (results.length === 0) {
-      return { eliminated: null, isTie: false, tiedPlayers: [] };
+      return { eliminated: null, isTie: false, tiedPlayers: [], wasWrong: false };
     }
 
     const maxVotes = results[0].votes;
@@ -224,10 +281,12 @@ export class WordGame {
 
     if (tiedPlayers.length > 1) {
       // There's a tie
+      this.state.canRevote = true;
       return {
         eliminated: null,
         isTie: true,
-        tiedPlayers
+        tiedPlayers,
+        wasWrong: false
       };
     }
 
@@ -236,10 +295,15 @@ export class WordGame {
     eliminated.isEliminated = true;
     this.state.eliminatedPlayer = eliminated;
     
+    // Check if wrong elimination (not imposter/other word)
+    const wasWrong = eliminated.wordType === 'normal';
+    this.state.wrongElimination = wasWrong;
+    
     return {
       eliminated,
       isTie: false,
-      tiedPlayers: []
+      tiedPlayers: [],
+      wasWrong
     };
   }
 
@@ -252,9 +316,41 @@ export class WordGame {
         if (tiedPlayerIds.includes(p.id)) {
           p.hasVoted = false;
           p.votedFor = undefined;
+          p.votedForImposter = undefined;
+          p.votedForOtherWord = undefined;
         }
       }
     });
+    this.state.votingRound++;
+    this.state.canRevote = false;
+  }
+
+  public revote(): void {
+    // Admin can trigger revote for ties
+    const activePlayers = this.state.players.filter(p => !p.isEliminated);
+    activePlayers.forEach(p => {
+      p.votes = 0;
+      p.hasVoted = false;
+      p.votedFor = undefined;
+      p.votedForImposter = undefined;
+      p.votedForOtherWord = undefined;
+    });
+    this.state.votingRound++;
+    this.state.canRevote = false;
+  }
+
+  public continueAfterWrongElimination(): void {
+    // After wrong elimination, allow another vote
+    const activePlayers = this.state.players.filter(p => !p.isEliminated);
+    activePlayers.forEach(p => {
+      p.votes = 0;
+      p.hasVoted = false;
+      p.votedFor = undefined;
+      p.votedForImposter = undefined;
+      p.votedForOtherWord = undefined;
+    });
+    this.state.wrongElimination = false;
+    this.state.eliminatedPlayer = undefined;
     this.state.votingRound++;
   }
 
@@ -308,7 +404,19 @@ export class WordGame {
     this.state.players.forEach(p => {
       p.currentWord = undefined;
       p.wordType = undefined;
+      p.votes = 0;
+      p.hasVoted = false;
+      p.votedFor = undefined;
+      p.votedForImposter = undefined;
+      p.votedForOtherWord = undefined;
+      p.isEliminated = false;
     });
+    this.state.votingPhase = false;
+    this.state.votingRound = 1;
+    this.state.eliminatedPlayer = undefined;
+    this.state.votingActivated = false;
+    this.state.wrongElimination = false;
+    this.state.canRevote = false;
     this.usedWords.clear();
   }
 

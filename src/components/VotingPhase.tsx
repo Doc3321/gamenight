@@ -10,22 +10,38 @@ interface VotingPhaseProps {
   game: WordGame;
   currentPlayerId: number; // The player who is currently voting
   onVoteComplete: () => void;
+  isAdmin?: boolean; // Whether current player is admin (for online mode)
 }
 
-export default function VotingPhase({ game, currentPlayerId, onVoteComplete }: VotingPhaseProps) {
+export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isAdmin = false }: VotingPhaseProps) {
   const [selectedTarget, setSelectedTarget] = useState<number | null>(null);
+  const [selectedImposterTarget, setSelectedImposterTarget] = useState<number | null>(null);
+  const [selectedOtherWordTarget, setSelectedOtherWordTarget] = useState<number | null>(null);
   const [gameState, setGameState] = useState(game.getState());
   const [showResults, setShowResults] = useState(false);
   const [eliminatedPlayer, setEliminatedPlayer] = useState<Player | null>(null);
   const [isTieBreak, setIsTieBreak] = useState(false);
   const [tiedPlayers, setTiedPlayers] = useState<Player[]>([]);
+  const [showTieResults, setShowTieResults] = useState(false);
+  const [showWrongElimination, setShowWrongElimination] = useState(false);
 
-  const handleVote = () => {
-    if (!selectedTarget) return;
+  const handleVote = (voteType?: 'imposter' | 'other-word') => {
+    const target = voteType 
+      ? (voteType === 'imposter' ? selectedImposterTarget : selectedOtherWordTarget)
+      : selectedTarget;
     
-    const success = game.castVote(currentPlayerId, selectedTarget);
+    if (!target) return;
+    
+    const success = game.castVote(currentPlayerId, target, voteType);
     if (success) {
       setGameState(game.getState());
+      if (voteType === 'imposter') {
+        setSelectedImposterTarget(null);
+      } else if (voteType === 'other-word') {
+        setSelectedOtherWordTarget(null);
+      } else {
+        setSelectedTarget(null);
+      }
     }
   };
 
@@ -34,19 +50,46 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete }: V
     setGameState(game.getState());
     
     if (result.isTie) {
-      // Start tie-break vote
+      // Show tie results (anonymous vote counts)
       setIsTieBreak(true);
       setTiedPlayers(result.tiedPlayers);
-      const tiedIds = result.tiedPlayers.map(p => p.id);
-      game.startTieBreakVote(tiedIds);
-      setGameState(game.getState());
-      setSelectedTarget(null);
+      setShowTieResults(true);
+    } else if (result.wasWrong) {
+      // Wrong elimination
+      setShowWrongElimination(true);
+      setEliminatedPlayer(result.eliminated);
     } else {
-      // Show eliminated player
+      // Correct elimination
       setShowResults(true);
       setEliminatedPlayer(result.eliminated);
     }
   }, [game]);
+
+  const handleRevote = () => {
+    game.revote();
+    setGameState(game.getState());
+    setShowTieResults(false);
+    setIsTieBreak(false);
+    setTiedPlayers([]);
+    setSelectedTarget(null);
+    setSelectedImposterTarget(null);
+    setSelectedOtherWordTarget(null);
+  };
+
+  const handleContinueAfterWrongElimination = () => {
+    game.continueAfterWrongElimination();
+    setGameState(game.getState());
+    setShowWrongElimination(false);
+    setEliminatedPlayer(null);
+    setSelectedTarget(null);
+    setSelectedImposterTarget(null);
+    setSelectedOtherWordTarget(null);
+  };
+
+  const handleActivateVoting = () => {
+    game.activateVoting();
+    setGameState(game.getState());
+  };
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -55,13 +98,18 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete }: V
       
       // Check if all players have voted
       const tiedIds = isTieBreak ? tiedPlayers.map(p => p.id) : undefined;
-      if (game.allPlayersVoted(tiedIds) && !showResults) {
+      if (game.allPlayersVoted(tiedIds) && !showResults && !showTieResults && !showWrongElimination) {
         if (isTieBreak) {
           // Handle tie-break results
           const result = game.calculateVotingResult();
           if (!result.isTie) {
-            setShowResults(true);
-            setEliminatedPlayer(result.eliminated);
+            if (result.wasWrong) {
+              setShowWrongElimination(true);
+              setEliminatedPlayer(result.eliminated);
+            } else {
+              setShowResults(true);
+              setEliminatedPlayer(result.eliminated);
+            }
           } else {
             // Still tied, continue tie-break
             const newTiedIds = result.tiedPlayers.map(p => p.id);
@@ -69,6 +117,8 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete }: V
             game.startTieBreakVote(newTiedIds);
             setGameState(game.getState());
             setSelectedTarget(null);
+            setSelectedImposterTarget(null);
+            setSelectedOtherWordTarget(null);
           }
         } else {
           handleCalculateResults();
@@ -77,7 +127,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete }: V
     }, 500); // Check every 500ms for updates
 
     return () => clearInterval(interval);
-  }, [game, showResults, isTieBreak, tiedPlayers, handleCalculateResults]);
+  }, [game, showResults, isTieBreak, tiedPlayers, handleCalculateResults, showTieResults, showWrongElimination]);
 
   const handleContinueAfterElimination = () => {
     onVoteComplete();
@@ -87,9 +137,50 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete }: V
   const activePlayers = gameState.players.filter(p => !p.isEliminated);
   const votingResults = game.getVotingResults();
   const hasVoted = currentPlayer?.hasVoted || false;
+  const isBothMode = gameState.gameMode === 'mixed';
+  const showVoteCounts = gameState.showVoteCounts; // false for online, true for local
 
-  // If showing results (eliminated player)
-  if (showResults && eliminatedPlayer) {
+  // Admin activation screen (online mode only)
+  if (gameState.isOnline && !gameState.votingActivated && isAdmin) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <Card>
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">הפעל הצבעה</CardTitle>
+          </CardHeader>
+          <CardContent className="text-center space-y-4">
+            <p className="text-muted-foreground">
+              כל השחקנים קיבלו את המילים שלהם. לחץ כדי להתחיל את שלב ההצבעה.
+            </p>
+            <Button onClick={handleActivateVoting} size="lg">
+              הפעל הצבעה
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Waiting for admin to activate (online mode)
+  if (gameState.isOnline && !gameState.votingActivated && !isAdmin) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <Card>
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">ממתין להפעלת הצבעה</CardTitle>
+          </CardHeader>
+          <CardContent className="text-center">
+            <p className="text-muted-foreground">
+              המארח צריך להפעיל את שלב ההצבעה
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Wrong elimination screen
+  if (showWrongElimination && eliminatedPlayer) {
     return (
       <div className="max-w-2xl mx-auto">
         <motion.div
@@ -97,7 +188,94 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete }: V
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}
         >
-          <Card className="border-red-500 border-2">
+          <Card className="border-orange-500 border-2">
+            <CardHeader className="text-center">
+              <CardTitle className="text-3xl text-orange-600">השחקן שהודח היה רגיל!</CardTitle>
+            </CardHeader>
+            <CardContent className="text-center space-y-4">
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.2, type: "spring" }}
+                className="text-4xl font-bold text-orange-600 py-6"
+              >
+                {eliminatedPlayer.name}
+              </motion.div>
+              <div className="space-y-2">
+                <p className="text-lg">קיבל {eliminatedPlayer.votes} קולות</p>
+                <p className="text-muted-foreground">השחקן הודח מהמשחק ולא יכול להצביע</p>
+                <p className="text-red-600 font-semibold">עדיין צריך למצוא את המתחזה/מילה דומה!</p>
+              </div>
+              {isAdmin && (
+                <Button onClick={handleContinueAfterWrongElimination} size="lg" className="mt-4">
+                  הצבעה נוספת
+                </Button>
+              )}
+              {!isAdmin && (
+                <p className="text-muted-foreground">ממתין למארח להתחיל הצבעה נוספת</p>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Tie results screen (anonymous vote counts)
+  if (showTieResults && isTieBreak) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <Card className="border-yellow-500 border-2">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl text-yellow-600">שוויון בהצבעה!</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-center text-muted-foreground">
+              יש שוויון בקולות. ספירת הקולות (ללא שמות):
+            </p>
+            <div className="space-y-2">
+              {votingResults
+                .filter(r => tiedPlayers.some(tp => tp.id === r.player.id))
+                .map((result, index) => (
+                  <div key={index} className="flex justify-between items-center p-3 bg-yellow-50 rounded-lg">
+                    <span className="text-sm text-muted-foreground">שחקן #{index + 1}</span>
+                    <span className="text-lg font-bold">{result.votes} קולות</span>
+                  </div>
+                ))}
+            </div>
+            {isAdmin && (
+              <Button onClick={handleRevote} size="lg" className="w-full mt-4">
+                הצבעה מחדש
+              </Button>
+            )}
+            {!isAdmin && (
+              <p className="text-center text-muted-foreground">
+                ממתין למארח להחליט על הצבעה מחדש
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Correct elimination screen
+  if (showResults && eliminatedPlayer) {
+    const eliminationType = eliminatedPlayer.wordType;
+    const typeText = eliminationType === 'imposter' 
+      ? 'מתחזה' 
+      : eliminationType === 'similar' 
+        ? 'מילה דומה' 
+        : 'רגיל';
+    
+    return (
+      <div className="max-w-2xl mx-auto">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+        >
+          <Card className={`border-2 ${eliminationType === 'normal' ? 'border-orange-500' : 'border-red-500'}`}>
             <CardHeader className="text-center">
               <CardTitle className="text-3xl text-red-600">השחקן הודח!</CardTitle>
             </CardHeader>
@@ -112,6 +290,16 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete }: V
               </motion.div>
               <div className="space-y-2">
                 <p className="text-lg">קיבל {eliminatedPlayer.votes} קולות</p>
+                {isBothMode && (
+                  <p className="text-lg font-semibold">
+                    היה: {typeText}
+                  </p>
+                )}
+                {!isBothMode && eliminationType !== 'normal' && (
+                  <p className="text-lg font-semibold">
+                    היה: {typeText}
+                  </p>
+                )}
                 <p className="text-muted-foreground">השחקן הודח מהמשחק</p>
               </div>
               <Button onClick={handleContinueAfterElimination} size="lg" className="mt-4">
@@ -136,6 +324,11 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete }: V
     ? tiedPlayers.some(tp => tp.id === currentPlayerId) && !hasVoted
     : !hasVoted;
 
+  // Check voting progress for both mode
+  const hasVotedImposter = currentPlayer?.votedForImposter !== undefined;
+  const hasVotedOtherWord = currentPlayer?.votedForOtherWord !== undefined;
+  const bothVotesComplete = isBothMode ? (hasVotedImposter && hasVotedOtherWord) : hasVoted;
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <Card>
@@ -148,14 +341,27 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete }: V
               יש שוויון! הצביעו רק בין השחקנים הקשורים
             </p>
           )}
+          {isBothMode && !isTieBreak && (
+            <p className="text-muted-foreground mt-2">
+              יש לך 2 קולות: אחד למתחזה ואחד למילה דומה
+            </p>
+          )}
         </CardHeader>
         <CardContent>
           {/* Current Player Info */}
           <div className="mb-6 p-4 bg-blue-50 rounded-lg text-center">
             <p className="text-sm text-muted-foreground">השחקן שלך:</p>
             <p className="text-xl font-bold">{currentPlayer?.name}</p>
-            {hasVoted && (
+            {bothVotesComplete && (
               <p className="text-sm text-green-600 mt-2">✓ הצבעת</p>
+            )}
+            {isBothMode && !bothVotesComplete && (
+              <div className="mt-2 space-y-1">
+                {hasVotedImposter && <p className="text-xs text-green-600">✓ הצבעת למתחזה</p>}
+                {hasVotedOtherWord && <p className="text-xs text-green-600">✓ הצבעת למילה דומה</p>}
+                {!hasVotedImposter && <p className="text-xs text-orange-600">✗ עדיין צריך להצביע למתחזה</p>}
+                {!hasVotedOtherWord && <p className="text-xs text-orange-600">✗ עדיין צריך להצביע למילה דומה</p>}
+              </div>
             )}
             {isTieBreak && !tiedPlayers.some(tp => tp.id === currentPlayerId) && (
               <p className="text-sm text-orange-600 mt-2">
@@ -164,8 +370,93 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete }: V
             )}
           </div>
 
-          {/* Voting Section */}
-          {canVote && playersToShow.length > 0 && (
+          {/* Voting Section - Both Mode */}
+          {isBothMode && !isTieBreak && !bothVotesComplete && playersToShow.length > 0 && (
+            <div className="space-y-6">
+              {/* Imposter Vote */}
+              {!hasVotedImposter && (
+                <div className="space-y-4 p-4 border-2 border-red-200 rounded-lg">
+                  <h3 className="text-lg font-semibold text-center text-red-600">
+                    בחר שחקן למתחזה:
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {playersToShow.map((player) => (
+                      <motion.button
+                        key={player.id}
+                        onClick={() => setSelectedImposterTarget(player.id)}
+                        className={`p-4 border-2 rounded-lg transition-all ${
+                          selectedImposterTarget === player.id
+                            ? 'border-red-500 bg-red-100 scale-105'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        disabled={selectedOtherWordTarget === player.id}
+                      >
+                        <div className="font-semibold">{player.name}</div>
+                        {selectedOtherWordTarget === player.id && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            כבר בחרת למילה דומה
+                          </div>
+                        )}
+                      </motion.button>
+                    ))}
+                  </div>
+                  <Button
+                    onClick={() => handleVote('imposter')}
+                    disabled={!selectedImposterTarget || selectedOtherWordTarget === selectedImposterTarget}
+                    className="w-full"
+                    size="lg"
+                  >
+                    הצבע למתחזה
+                  </Button>
+                </div>
+              )}
+
+              {/* Other Word Vote */}
+              {!hasVotedOtherWord && (
+                <div className="space-y-4 p-4 border-2 border-blue-200 rounded-lg">
+                  <h3 className="text-lg font-semibold text-center text-blue-600">
+                    בחר שחקן למילה דומה:
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {playersToShow.map((player) => (
+                      <motion.button
+                        key={player.id}
+                        onClick={() => setSelectedOtherWordTarget(player.id)}
+                        className={`p-4 border-2 rounded-lg transition-all ${
+                          selectedOtherWordTarget === player.id
+                            ? 'border-blue-500 bg-blue-100 scale-105'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        disabled={selectedImposterTarget === player.id}
+                      >
+                        <div className="font-semibold">{player.name}</div>
+                        {selectedImposterTarget === player.id && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            כבר בחרת למתחזה
+                          </div>
+                        )}
+                      </motion.button>
+                    ))}
+                  </div>
+                  <Button
+                    onClick={() => handleVote('other-word')}
+                    disabled={!selectedOtherWordTarget || selectedImposterTarget === selectedOtherWordTarget}
+                    className="w-full"
+                    size="lg"
+                  >
+                    הצבע למילה דומה
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Voting Section - Normal Mode */}
+          {!isBothMode && canVote && playersToShow.length > 0 && (
             <div className="space-y-4">
               <h3 className="text-lg font-semibold text-center mb-4">
                 בחר שחקן להדחה:
@@ -184,7 +475,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete }: V
                     whileTap={{ scale: 0.95 }}
                   >
                     <div className="font-semibold">{player.name}</div>
-                    {player.votes !== undefined && player.votes > 0 && (
+                    {showVoteCounts && player.votes !== undefined && player.votes > 0 && (
                       <div className="text-sm text-muted-foreground mt-1">
                         {player.votes} קולות
                       </div>
@@ -194,7 +485,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete }: V
               </div>
               
               <Button
-                onClick={handleVote}
+                onClick={() => handleVote()}
                 disabled={!selectedTarget}
                 className="w-full mt-4"
                 size="lg"
@@ -204,54 +495,61 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete }: V
             </div>
           )}
 
-          {/* Real-time Vote Counts */}
-          <div className="mt-6 pt-6 border-t">
-            <h3 className="text-lg font-semibold mb-4 text-center">ספירת קולות:</h3>
-            <div className="space-y-2">
-              {votingResults.map((result, index) => (
-                <motion.div
-                  key={result.player.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className={`flex justify-between items-center p-3 rounded-lg ${
-                    index === 0 && result.votes > 0
-                      ? 'bg-red-50 border-2 border-red-200'
-                      : 'bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="font-semibold">{result.player.name}</span>
-                    {result.player.isEliminated && (
-                      <span className="text-xs text-red-600">(הודח)</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl font-bold">{result.votes}</span>
-                    <span className="text-sm text-muted-foreground">קולות</span>
-                  </div>
-                </motion.div>
-              ))}
+          {/* Real-time Vote Counts (only for local mode or if admin) */}
+          {showVoteCounts && (
+            <div className="mt-6 pt-6 border-t">
+              <h3 className="text-lg font-semibold mb-4 text-center">ספירת קולות:</h3>
+              <div className="space-y-2">
+                {votingResults.map((result, index) => (
+                  <motion.div
+                    key={result.player.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className={`flex justify-between items-center p-3 rounded-lg ${
+                      index === 0 && result.votes > 0
+                        ? 'bg-red-50 border-2 border-red-200'
+                        : 'bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="font-semibold">{result.player.name}</span>
+                      {result.player.isEliminated && (
+                        <span className="text-xs text-red-600">(הודח)</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl font-bold">{result.votes}</span>
+                      <span className="text-sm text-muted-foreground">קולות</span>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Waiting for other players */}
-          {hasVoted && !game.allPlayersVoted() && (
+          {bothVotesComplete && !game.allPlayersVoted() && (
             <div className="mt-6 text-center">
               <p className="text-muted-foreground">
                 ממתין לשחקנים אחרים להצביע...
               </p>
               <div className="mt-4">
                 <div className="flex justify-center gap-2">
-                  {activePlayers.map((player) => (
-                    <div
-                      key={player.id}
-                      className={`w-3 h-3 rounded-full ${
-                        player.hasVoted ? 'bg-green-500' : 'bg-gray-300'
-                      }`}
-                      title={player.name}
-                    />
-                  ))}
+                  {activePlayers.map((player) => {
+                    const playerVoted = isBothMode
+                      ? player.hasVoted && player.votedForImposter !== undefined && player.votedForOtherWord !== undefined
+                      : player.hasVoted;
+                    return (
+                      <div
+                        key={player.id}
+                        className={`w-3 h-3 rounded-full ${
+                          playerVoted ? 'bg-green-500' : 'bg-gray-300'
+                        }`}
+                        title={player.name}
+                      />
+                    );
+                  })}
                 </div>
               </div>
             </div>

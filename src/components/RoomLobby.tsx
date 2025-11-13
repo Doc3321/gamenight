@@ -36,13 +36,41 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
   const [selectedTopic, setSelectedTopic] = useState('');
   const [selectedGameMode, setSelectedGameMode] = useState<GameMode>('similar-word');
   const [isStarting, setIsStarting] = useState(false);
+  const [isTogglingReady, setIsTogglingReady] = useState(false);
   
   const isHost = room.players.find(p => p.id === currentPlayerId)?.isHost || false;
-  const canStart = isHost && room.players.length >= 2 && selectedTopic;
+  const currentPlayer = room.players.find(p => p.id === currentPlayerId);
+  const allPlayersReady = room.players.every(p => p.isReady);
+  const canStart = isHost && room.players.length >= 2 && selectedTopic && allPlayersReady;
 
   const copyRoomId = () => {
     navigator.clipboard.writeText(room.id);
     toast.success('מספר החדר הועתק!');
+  };
+
+  const handleToggleReady = async () => {
+    if (!currentPlayer) return;
+    
+    setIsTogglingReady(true);
+    try {
+      const response = await fetch('/api/rooms/ready', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomId: room.id,
+          playerId: currentPlayerId,
+          isReady: !currentPlayer.isReady
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update ready status');
+      }
+    } catch {
+      toast.error('שגיאה בעדכון סטטוס מוכן');
+    } finally {
+      setIsTogglingReady(false);
+    }
   };
 
   const handleStartGame = async () => {
@@ -136,14 +164,31 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
                     </Badge>
                   )}
                 </div>
-                {player.isReady && (
+                {player.isReady ? (
                   <Badge variant="outline" className="text-green-600">
                     מוכן
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-gray-400">
+                    לא מוכן
                   </Badge>
                 )}
               </div>
             ))}
           </div>
+          
+          {!isHost && (
+            <div className="mt-4">
+              <Button
+                onClick={handleToggleReady}
+                disabled={isTogglingReady}
+                variant={currentPlayer?.isReady ? 'outline' : 'default'}
+                className="w-full"
+              >
+                {currentPlayer?.isReady ? 'לא מוכן' : 'מוכן'}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -215,6 +260,12 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
             {room.players.length < 2 && (
               <p className="text-sm text-muted-foreground text-center">
                 צריך לפחות 2 שחקנים כדי להתחיל
+              </p>
+            )}
+            
+            {!allPlayersReady && room.players.length >= 2 && (
+              <p className="text-sm text-orange-600 text-center">
+                ממתין שכל השחקנים יהיו מוכנים
               </p>
             )}
           </CardContent>
