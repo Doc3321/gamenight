@@ -28,7 +28,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
   const [currentVotingPlayerIndex, setCurrentVotingPlayerIndex] = useState(0);
   const [spinProgress, setSpinProgress] = useState(0);
 
-  const handleSpin = () => {
+  const handleSpin = async () => {
     setIsSpinning(true);
     setShowResult(false);
     setSpinProgress(0);
@@ -45,14 +45,41 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
     }, 40);
     
     // Simulate spinning delay
-    setTimeout(() => {
+    setTimeout(async () => {
       const result = game.spin();
       if (result) {
-        setGameState(game.getState());
+        const newState = game.getState();
+        setGameState(newState);
         setIsSpinning(false);
         setShowResult(true);
         setSpinProgress(100);
         clearInterval(progressInterval);
+        
+        // Sync game state to server for online games
+        if (gameState.isOnline && roomId) {
+          try {
+            await fetch('/api/rooms/game-state', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                roomId,
+                gameStateData: {
+                  currentPlayerIndex: newState.currentPlayerIndex,
+                  votingPhase: newState.votingPhase,
+                  votingActivated: newState.votingActivated,
+                  playerWords: newState.players.reduce((acc, p) => {
+                    if (p.currentWord) {
+                      acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
+                    }
+                    return acc;
+                  }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
+                }
+              })
+            });
+          } catch (error) {
+            console.error('Error syncing game state:', error);
+          }
+        }
       }
     }, 2000);
   };
@@ -64,7 +91,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
     return null;
   };
 
-  const handleNextSpin = () => {
+  const handleNextSpin = async () => {
     setShowResult(false);
     
     // Check if all players have received their words
@@ -72,15 +99,69 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
     if (newState.currentPlayerIndex >= newState.players.length) {
       // All players have spun - start voting phase
       game.startVotingPhase();
-      setGameState(game.getState());
+      const updatedState = game.getState();
+      setGameState(updatedState);
+      
+      // Sync to server
+      if (gameState.isOnline && roomId) {
+        try {
+          await fetch('/api/rooms/game-state', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              roomId,
+              gameStateData: {
+                currentPlayerIndex: updatedState.currentPlayerIndex,
+                votingPhase: updatedState.votingPhase,
+                votingActivated: updatedState.votingActivated,
+                playerWords: updatedState.players.reduce((acc, p) => {
+                  if (p.currentWord) {
+                    acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
+                  }
+                  return acc;
+                }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
+              }
+            })
+          });
+        } catch (error) {
+          console.error('Error syncing game state:', error);
+        }
+      }
     } else if (newState.currentSpin >= newState.totalSpins) {
       // This shouldn't happen, but just in case
       game.completeGame();
       setGameState(game.getState());
     } else {
-      // Clear the current word for next spin
+      // Clear the current word for next spin (but keep player's word)
       game.clearCurrentWord();
-      setGameState(game.getState());
+      const updatedState = game.getState();
+      setGameState(updatedState);
+      
+      // Sync to server
+      if (gameState.isOnline && roomId) {
+        try {
+          await fetch('/api/rooms/game-state', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              roomId,
+              gameStateData: {
+                currentPlayerIndex: updatedState.currentPlayerIndex,
+                votingPhase: updatedState.votingPhase,
+                votingActivated: updatedState.votingActivated,
+                playerWords: updatedState.players.reduce((acc, p) => {
+                  if (p.currentWord) {
+                    acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
+                  }
+                  return acc;
+                }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
+              }
+            })
+          });
+        } catch (error) {
+          console.error('Error syncing game state:', error);
+        }
+      }
     }
   };
 
@@ -340,6 +421,29 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                   ? currentSpinningPlayer && viewingPlayer && currentSpinningPlayer.id === viewingPlayer.id
                   : true; // Local mode always shows
                 
+                // If player already has their word, show it regardless of whose turn it is
+                if (hasMyWord && viewingPlayer?.currentWord) {
+                  return (
+                    <motion.div 
+                      key="my-word"
+                      initial={{ opacity: 0, y: 20, scale: 0.8 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -20, scale: 0.8 }}
+                      transition={{ duration: 0.6, type: "spring" }}
+                      className="text-center"
+                    >
+                      <div className="p-8 bg-gradient-to-br from-purple-100 via-pink-100 to-orange-100 dark:from-purple-900/20 dark:via-pink-900/20 dark:to-orange-900/20 rounded-xl text-center text-3xl font-bold border-2 border-purple-300 dark:border-purple-700 hover:shadow-lg transition-all">
+                        {viewingPlayer.currentWord}
+                      </div>
+                      <div className="mt-4 text-center">
+                        <p className="text-sm text-muted-foreground">
+                          המילה שלך
+                        </p>
+                      </div>
+                    </motion.div>
+                  );
+                }
+                
                 if (gameState.isOnline && currentSpinningPlayerIndex < gameState.players.length) {
                   // Online mode: show whose turn it is
                   if (!isMyTurn && currentSpinningPlayer) {
@@ -365,8 +469,8 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                   }
                 }
                 
-                // Show word if: local mode OR it's my turn OR I already have my word
-                if (gameState.selectedWord && (!gameState.isOnline || isMyTurn || hasMyWord)) {
+                // Show word if: local mode OR it's my turn
+                if (gameState.selectedWord && (!gameState.isOnline || isMyTurn)) {
                   const wordToShow = viewingPlayer?.currentWord || gameState.currentChoices[0] || gameState.selectedWord;
                   return (
                     <motion.div 
