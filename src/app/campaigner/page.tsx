@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { CampaignerDashboard } from '@/components/CampaignerDashboard';
-import { ClipperManagement } from '@/components/ClipperManagement';
+import CampaignerDashboard from '@/components/CampaignerDashboard';
+import ClipperManagement from '@/components/ClipperManagement';
 import { Event } from '@/types/campaigner';
 
 export default function CampaignerPage() {
