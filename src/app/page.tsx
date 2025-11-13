@@ -10,6 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import GameBoard from '@/components/GameBoard';
 import JoinRoom from '@/components/JoinRoom';
 import RoomLobby from '@/components/RoomLobby';
+import GameSetup from '@/components/GameSetup';
+import Link from 'next/link';
+import { Player as GamePlayer } from '@/lib/gameLogic';
 
 type AppMode = 'local' | 'online';
 
@@ -39,24 +42,31 @@ export default function Home() {
   const [game, setGame] = useState<WordGame | null>(null);
   const [selectedTopic, setSelectedTopic] = useState<string>('');
   const [gameStarted, setGameStarted] = useState(false);
+  const [showSetup, setShowSetup] = useState(false);
   
   // Online game state
   const [room, setRoom] = useState<GameRoom | null>(null);
   const [currentPlayerId, setCurrentPlayerId] = useState<string>('');
 
-  const startNewGame = (gameMode: GameModeType = 'similar-word') => {
+  const startNewGame = (gameMode: GameModeType = 'similar-word', players: GamePlayer[] = []) => {
     const topic = wordTopics.find(t => t.id === selectedTopic);
     if (topic) {
-      const newGame = new WordGame(topic, gameMode);
+      const newGame = new WordGame(topic, gameMode, players);
       setGame(newGame);
       setGameStarted(true);
+      setShowSetup(false);
     }
+  };
+
+  const handleStartWithSetup = (gameMode: GameModeType, players: GamePlayer[]) => {
+    startNewGame(gameMode, players);
   };
 
   const resetGame = () => {
     setGame(null);
     setSelectedTopic('');
     setGameStarted(false);
+    setShowSetup(false);
     setRoom(null);
     setCurrentPlayerId('');
   };
@@ -176,6 +186,17 @@ export default function Home() {
     );
   }
 
+  // Show setup screen if topic is selected but game hasn't started
+  if (!gameStarted && appMode === 'local' && showSetup && selectedTopic) {
+    return (
+      <GameSetup
+        selectedTopic={selectedTopic}
+        onStartGame={handleStartWithSetup}
+        onBack={() => setShowSetup(false)}
+      />
+    );
+  }
+
   // Local mode - show topic selection
   if (!gameStarted && appMode === 'local') {
     return (
@@ -214,6 +235,14 @@ export default function Home() {
                 </Button>
               </div>
               
+              <div className="pt-4 border-t">
+                <Link href="/campaigner">
+                  <Button variant="outline" className="w-full">
+                    Campaigner Dashboard
+                  </Button>
+                </Link>
+              </div>
+              
               {appMode === 'local' && (
                 <motion.div 
                   initial={{ opacity: 0, x: -20 }}
@@ -244,11 +273,11 @@ export default function Home() {
                   transition={{ delay: 0.6 }}
                 >
                   <Button 
-                    onClick={() => startNewGame()} 
+                    onClick={() => setShowSetup(true)} 
                     disabled={!selectedTopic}
                     className="w-full"
                   >
-                    התחל משחק חדש
+                    הגדר משחק
                   </Button>
                 </motion.div>
               )}

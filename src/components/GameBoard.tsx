@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { WordGame, SpinResult } from '@/lib/gameLogic';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import VotingPhase from './VotingPhase';
 
 interface GameBoardProps {
   game: WordGame;
@@ -17,6 +18,7 @@ export default function GameBoard({ game, onReset }: GameBoardProps) {
   const [showResult, setShowResult] = useState(false);
   const [lastResult, setLastResult] = useState<SpinResult | null>(null);
   const [isFirstSpin, setIsFirstSpin] = useState(true);
+  const [currentVotingPlayerIndex, setCurrentVotingPlayerIndex] = useState(0);
 
   const handleSpin = () => {
     setIsSpinning(true);
@@ -34,24 +36,24 @@ export default function GameBoard({ game, onReset }: GameBoardProps) {
     }, 2000);
   };
 
-  const getSpinTypeText = (spinType: string) => {
-    switch (spinType) {
-      case 'normal':
-        return '✅ המילה הנכונה';
-      case 'similar':
-        return '🎭 מילה דומה';
-      case 'imposter':
-        return '🎭 מתחזה';
-      default:
-        return '';
+  const getCurrentPlayer = () => {
+    if (gameState.players && gameState.currentPlayerIndex < gameState.players.length) {
+      return gameState.players[gameState.currentPlayerIndex];
     }
+    return null;
   };
 
   const handleNextSpin = () => {
     setShowResult(false);
     
-    // If this was the last spin, complete the game
-    if (gameState.currentSpin >= gameState.totalSpins) {
+    // Check if all players have received their words
+    const newState = game.getState();
+    if (newState.currentPlayerIndex >= newState.players.length) {
+      // All players have spun - start voting phase
+      game.startVotingPhase();
+      setGameState(game.getState());
+    } else if (newState.currentSpin >= newState.totalSpins) {
+      // This shouldn't happen, but just in case
       game.completeGame();
       setGameState(game.getState());
     } else {
@@ -69,19 +71,101 @@ export default function GameBoard({ game, onReset }: GameBoardProps) {
   };
 
   useEffect(() => {
-    setGameState(game.getState());
+    const newState = game.getState();
+    setGameState(newState);
+    
     // If this is the first spin and we have a selected word, show it immediately
-    if (isFirstSpin && game.getState().selectedWord) {
+    if (isFirstSpin && newState.selectedWord) {
       setShowResult(true);
       setLastResult({
-        choices: game.getState().currentChoices,
-        selectedWord: game.getState().selectedWord,
-        isImposter: game.getState().isImposter,
-        spinType: game.getState().isImposter ? 'imposter' : 'normal'
+        choices: newState.currentChoices,
+        selectedWord: newState.selectedWord,
+        isImposter: newState.isImposter,
+        spinType: newState.isImposter ? 'imposter' : 'normal'
       });
       setIsFirstSpin(false);
     }
+
+    // If voting phase started, find first player who hasn't voted
+    if (newState.votingPhase && !newState.eliminatedPlayer) {
+      const activePlayers = newState.players.filter(p => !p.isEliminated);
+      const nextVoter = activePlayers.find(p => !p.hasVoted);
+      if (nextVoter) {
+        const voterIndex = newState.players.findIndex(p => p.id === nextVoter.id);
+        setCurrentVotingPlayerIndex(voterIndex);
+      }
+    }
   }, [game, isFirstSpin]);
+
+  const handleVoteComplete = () => {
+    const newState = game.getState();
+    setGameState(newState);
+    
+    // If there's an eliminated player, reset for next round or end game
+    if (newState.eliminatedPlayer) {
+      // For now, just show the result. Can add logic for multiple rounds later
+      setCurrentVotingPlayerIndex(0);
+    } else {
+      // Check if there are more players to vote
+      const activePlayers = newState.players.filter(p => !p.isEliminated);
+      const nextVoter = activePlayers.find(p => !p.hasVoted);
+      if (nextVoter) {
+        const voterIndex = newState.players.findIndex(p => p.id === nextVoter.id);
+        setCurrentVotingPlayerIndex(voterIndex);
+      }
+    }
+  };
+
+  // Show voting phase if all players have received words
+  if (gameState.votingPhase && gameState.currentPlayerIndex >= gameState.players.length) {
+    // Find the next player who hasn't voted
+    const activePlayers = gameState.players.filter(p => !p.isEliminated);
+    const nextVoter = activePlayers.find(p => !p.hasVoted);
+    
+    if (nextVoter) {
+      // Update current voting player index
+      const voterIndex = gameState.players.findIndex(p => p.id === nextVoter.id);
+      if (voterIndex !== currentVotingPlayerIndex) {
+        setCurrentVotingPlayerIndex(voterIndex);
+      }
+      
+      return (
+        <VotingPhase
+          game={game}
+          currentPlayerId={nextVoter.id}
+          onVoteComplete={handleVoteComplete}
+        />
+      );
+    } else if (gameState.eliminatedPlayer) {
+      // All voted and eliminated player is set, show results
+      return (
+        <div className="max-w-2xl mx-auto">
+          <Card className="border-red-500 border-2">
+            <CardHeader className="text-center">
+              <CardTitle className="text-3xl text-red-600">השחקן הודח!</CardTitle>
+            </CardHeader>
+            <CardContent className="text-center space-y-4">
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.2, type: "spring" }}
+                className="text-4xl font-bold text-red-600 py-6"
+              >
+                {gameState.eliminatedPlayer.name}
+              </motion.div>
+              <div className="space-y-2">
+                <p className="text-lg">קיבל {gameState.eliminatedPlayer.votes} קולות</p>
+                <p className="text-muted-foreground">השחקן הודח מהמשחק</p>
+              </div>
+              <Button onClick={onReset} size="lg" className="mt-4">
+                חזור לתפריט
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+  }
 
   if (gameState.gameCompleted) {
     return (
@@ -91,7 +175,14 @@ export default function GameBoard({ game, onReset }: GameBoardProps) {
             <CardTitle className="text-2xl">המשחק הסתיים!</CardTitle>
           </CardHeader>
           <CardContent className="text-center space-y-4">
-            <p className="text-lg">סיימת את כל 3 הסיבובים</p>
+            <p className="text-lg">סיימת את כל הסיבובים</p>
+            {gameState.eliminatedPlayer && (
+              <div className="p-4 bg-red-50 rounded-lg">
+                <p className="text-red-600 font-semibold">
+                  השחקן שהודח: {gameState.eliminatedPlayer.name}
+                </p>
+              </div>
+            )}
             <div className="flex gap-4 justify-center">
               <Button onClick={handleReset} variant="outline">
                 משחק חדש
@@ -120,7 +211,14 @@ export default function GameBoard({ game, onReset }: GameBoardProps) {
               <p className="text-muted-foreground">סיבובים</p>
             </div>
             
-            {!showResult && !isSpinning && !gameState.selectedWord && (
+            {getCurrentPlayer() && (
+              <div className="text-center p-3 bg-blue-50 rounded-lg">
+                <p className="text-sm text-muted-foreground">תור של:</p>
+                <p className="text-lg font-semibold">{getCurrentPlayer()?.name}</p>
+              </div>
+            )}
+            
+            {!showResult && !isSpinning && !gameState.selectedWord && gameState.currentPlayerIndex < gameState.players.length && (
               <Button onClick={handleSpin} className="w-full" size="lg">
                 סובב! 🎯
               </Button>
@@ -152,12 +250,12 @@ export default function GameBoard({ game, onReset }: GameBoardProps) {
                   className="text-center"
                 >
                   <div className="p-6 bg-primary/10 rounded-lg text-center text-2xl font-bold border-2 border-primary/20 hover:bg-primary/20 transition-colors">
-                    {gameState.isImposter ? gameState.currentChoices[0] : gameState.selectedWord}
+                    {gameState.currentChoices[0] || gameState.selectedWord}
                   </div>
-                  {lastResult && (
+                  {gameState.currentChoices[0] && (
                     <div className="mt-4 text-center">
-                      <p className="text-lg font-medium">
-                        {getSpinTypeText(lastResult.spinType)}
+                      <p className="text-sm text-muted-foreground">
+                        המילה שלך
                       </p>
                     </div>
                   )}
@@ -193,15 +291,17 @@ export default function GameBoard({ game, onReset }: GameBoardProps) {
           transition={{ delay: 0.5 }}
           className="text-center mt-6"
         >
-          {gameState.currentSpin < gameState.totalSpins ? (
+          {gameState.currentPlayerIndex < gameState.players.length ? (
+            // More players to spin
             <Button onClick={handleNextSpin} className="w-full max-w-md" size="lg">
               סיבוב הבא
             </Button>
-          ) : gameState.currentSpin === gameState.totalSpins ? (
+          ) : gameState.currentPlayerIndex >= gameState.players.length ? (
+            // All players have spun - this is the last player viewing their word
             <div className="space-y-2">
-              <p className="text-lg font-semibold">זהו הסיבוב האחרון!</p>
+              <p className="text-lg font-semibold">כל השחקנים קיבלו את המילים שלהם!</p>
               <Button onClick={handleNextSpin} className="w-full max-w-md" size="lg">
-                סיים משחק
+                התחל הצבעה
               </Button>
             </div>
           ) : null}

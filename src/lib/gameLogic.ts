@@ -2,6 +2,17 @@ import { WordTopic } from '@/data/wordTopics';
 
 export type GameMode = 'similar-word' | 'imposter' | 'mixed';
 
+export interface Player {
+  id: number;
+  name: string;
+  currentWord?: string;
+  wordType?: 'normal' | 'similar' | 'imposter';
+  votes?: number; // Number of votes received
+  hasVoted?: boolean; // Whether this player has voted
+  votedFor?: number; // ID of player this player voted for
+  isEliminated?: boolean; // Whether player is eliminated
+}
+
 export interface GameState {
   currentSpin: number;
   totalSpins: number;
@@ -13,6 +24,11 @@ export interface GameState {
   gameWord: string; // 1 word selected for the entire game
   gameMode: GameMode;
   spinOrder: (boolean | 'similar' | 'imposter')[]; // which spins are imposter/similar vs normal
+  players: Player[];
+  currentPlayerIndex: number;
+  votingPhase: boolean; // Whether we're in voting phase
+  votingRound: number; // Current voting round (for tie-breaking)
+  eliminatedPlayer?: Player; // The eliminated player
 }
 
 export interface SpinResult {
@@ -26,27 +42,33 @@ export class WordGame {
   private state: GameState;
   private usedWords: Set<string> = new Set();
 
-  constructor(topic: WordTopic, gameMode: GameMode = 'similar-word') {
+  constructor(topic: WordTopic, gameMode: GameMode = 'similar-word', players: Player[] = []) {
     // Select 1 random word for the entire game
     const gameWord = topic.words[Math.floor(Math.random() * topic.words.length)];
     
-    // Create spin order based on game mode
+    // Create spin order based on game mode and number of players
+    const numPlayers = players.length || 3;
     let spinOrder: (boolean | 'similar' | 'imposter')[];
+    
     switch (gameMode) {
       case 'similar-word':
-        // 2 normal, 1 similar word
-        spinOrder = [false, false, 'similar'];
+        // 1 similar word, rest normal
+        spinOrder = Array(numPlayers).fill(false).map((_, i) => i === 0 ? 'similar' : false);
         break;
       case 'imposter':
-        // 2 normal, 1 imposter
-        spinOrder = [false, false, 'imposter'];
+        // 1 imposter, rest normal
+        spinOrder = Array(numPlayers).fill(false).map((_, i) => i === 0 ? 'imposter' : false);
         break;
       case 'mixed':
-        // 1 normal, 1 similar word, 1 imposter
-        spinOrder = [false, 'similar', 'imposter'];
+        // 1 similar word, 1 imposter, rest normal
+        spinOrder = Array(numPlayers).fill(false).map((_, i) => {
+          if (i === 0) return 'similar';
+          if (i === 1) return 'imposter';
+          return false;
+        });
         break;
       default:
-        spinOrder = [false, false, 'similar'];
+        spinOrder = Array(numPlayers).fill(false).map((_, i) => i === 0 ? 'similar' : false);
     }
     
     const shuffledOrder = this.shuffleArray([...spinOrder]);
@@ -54,7 +76,7 @@ export class WordGame {
     
     this.state = {
       currentSpin: 0,
-      totalSpins: 3,
+      totalSpins: numPlayers,
       currentChoices: [],
       selectedWord: '',
       isImposter: false,
@@ -62,7 +84,20 @@ export class WordGame {
       topic,
       gameWord,
       gameMode,
-      spinOrder: shuffledOrder
+      spinOrder: shuffledOrder,
+      players: players.map(p => ({ 
+        ...p, 
+        currentWord: undefined, 
+        wordType: undefined,
+        votes: 0,
+        hasVoted: false,
+        votedFor: undefined,
+        isEliminated: false
+      })),
+      currentPlayerIndex: 0,
+      votingPhase: false,
+      votingRound: 1,
+      eliminatedPlayer: undefined
     };
   }
 
@@ -71,14 +106,15 @@ export class WordGame {
   }
 
   public spin(): SpinResult | null {
-    if (this.state.gameCompleted) {
+    if (this.state.gameCompleted || this.state.currentPlayerIndex >= this.state.players.length) {
       return null;
     }
 
-    // Get the current spin order
-    const spinType = this.state.spinOrder[this.state.currentSpin];
+    // Get the current spin order for this player
+    const spinType = this.state.spinOrder[this.state.currentPlayerIndex];
     const selectedWord = this.state.gameWord;
-    console.log(`Spin ${this.state.currentSpin + 1}: spinType = ${spinType}`); // Debug log
+    const currentPlayer = this.state.players[this.state.currentPlayerIndex];
+    console.log(`Spin ${this.state.currentPlayerIndex + 1} (${currentPlayer.name}): spinType = ${spinType}`); // Debug log
 
     let finalChoices: string[];
     let isImposter = false;
@@ -102,15 +138,18 @@ export class WordGame {
       actualSpinType = 'normal';
     }
 
+    // Update player's word
+    this.state.players[this.state.currentPlayerIndex].currentWord = finalChoices[0];
+    this.state.players[this.state.currentPlayerIndex].wordType = actualSpinType;
+
     this.state.currentChoices = finalChoices;
     this.state.selectedWord = selectedWord;
     this.state.isImposter = isImposter;
     this.state.currentSpin++;
+    this.state.currentPlayerIndex++;
 
-    // Only mark as completed after showing the result
-    if (this.state.currentSpin > this.state.totalSpins) {
-      this.state.gameCompleted = true;
-    }
+    // Don't start voting phase immediately - let the last player see their word first
+    // Voting phase will be started manually after the last player views their word
 
     return {
       choices: finalChoices,
@@ -118,6 +157,105 @@ export class WordGame {
       isImposter,
       spinType: actualSpinType
     };
+  }
+
+  public startVotingPhase(): void {
+    this.state.votingPhase = true;
+    // Reset voting state for all active (non-eliminated) players
+    this.state.players.forEach(p => {
+      if (!p.isEliminated) {
+        p.votes = 0;
+        p.hasVoted = false;
+        p.votedFor = undefined;
+      }
+    });
+  }
+
+  public castVote(voterId: number, targetId: number): boolean {
+    const voter = this.state.players.find(p => p.id === voterId);
+    const target = this.state.players.find(p => p.id === targetId);
+
+    // Validation
+    if (!voter || !target) return false;
+    if (voter.isEliminated || target.isEliminated) return false;
+    if (voterId === targetId) return false; // Can't vote for yourself
+    if (voter.hasVoted) return false; // Already voted
+
+    // Cast vote
+    voter.hasVoted = true;
+    voter.votedFor = targetId;
+    if (target.votes === undefined) target.votes = 0;
+    target.votes!++;
+
+    return true;
+  }
+
+  public getVotingResults(): { player: Player; votes: number }[] {
+    const activePlayers = this.state.players.filter(p => !p.isEliminated);
+    return activePlayers.map(p => ({
+      player: p,
+      votes: p.votes || 0
+    })).sort((a, b) => b.votes - a.votes);
+  }
+
+  public allPlayersVoted(tiedPlayerIds?: number[]): boolean {
+    if (tiedPlayerIds && tiedPlayerIds.length > 0) {
+      // In tie-break, only check if tied players have voted
+      const tiedPlayers = this.state.players.filter(p => 
+        tiedPlayerIds.includes(p.id) && !p.isEliminated
+      );
+      return tiedPlayers.length > 0 && tiedPlayers.every(p => p.hasVoted);
+    }
+    
+    // Normal voting - all active players must vote
+    const activePlayers = this.state.players.filter(p => !p.isEliminated);
+    return activePlayers.length > 0 && activePlayers.every(p => p.hasVoted);
+  }
+
+  public calculateVotingResult(): { eliminated: Player | null; isTie: boolean; tiedPlayers: Player[] } {
+    const results = this.getVotingResults();
+    
+    if (results.length === 0) {
+      return { eliminated: null, isTie: false, tiedPlayers: [] };
+    }
+
+    const maxVotes = results[0].votes;
+    const tiedPlayers = results.filter(r => r.votes === maxVotes).map(r => r.player);
+
+    if (tiedPlayers.length > 1) {
+      // There's a tie
+      return {
+        eliminated: null,
+        isTie: true,
+        tiedPlayers
+      };
+    }
+
+    // Single winner (most votes = eliminated)
+    const eliminated = tiedPlayers[0];
+    eliminated.isEliminated = true;
+    this.state.eliminatedPlayer = eliminated;
+    
+    return {
+      eliminated,
+      isTie: false,
+      tiedPlayers: []
+    };
+  }
+
+  public startTieBreakVote(tiedPlayerIds: number[]): void {
+    // Reset votes for all active players (only tied players will vote, but we reset all)
+    this.state.players.forEach(p => {
+      if (!p.isEliminated) {
+        p.votes = 0;
+        // Only reset voting status for tied players (they can vote again)
+        if (tiedPlayerIds.includes(p.id)) {
+          p.hasVoted = false;
+          p.votedFor = undefined;
+        }
+      }
+    });
+    this.state.votingRound++;
   }
 
   public clearCurrentWord(): void {
@@ -134,20 +272,26 @@ export class WordGame {
     // Select a new random word for the entire game
     const gameWord = this.state.topic.words[Math.floor(Math.random() * this.state.topic.words.length)];
     
-    // Create new spin order based on current game mode
+    // Create new spin order based on current game mode and number of players
+    const numPlayers = this.state.players.length;
     let spinOrder: (boolean | 'similar' | 'imposter')[];
+    
     switch (this.state.gameMode) {
       case 'similar-word':
-        spinOrder = [false, false, 'similar'];
+        spinOrder = Array(numPlayers).fill(false).map((_, i) => i === 0 ? 'similar' : false);
         break;
       case 'imposter':
-        spinOrder = [false, false, 'imposter'];
+        spinOrder = Array(numPlayers).fill(false).map((_, i) => i === 0 ? 'imposter' : false);
         break;
       case 'mixed':
-        spinOrder = [false, 'similar', 'imposter'];
+        spinOrder = Array(numPlayers).fill(false).map((_, i) => {
+          if (i === 0) return 'similar';
+          if (i === 1) return 'imposter';
+          return false;
+        });
         break;
       default:
-        spinOrder = [false, false, 'similar'];
+        spinOrder = Array(numPlayers).fill(false).map((_, i) => i === 0 ? 'similar' : false);
     }
     
     const shuffledOrder = this.shuffleArray([...spinOrder]);
@@ -159,6 +303,12 @@ export class WordGame {
     this.state.gameCompleted = false;
     this.state.gameWord = gameWord;
     this.state.spinOrder = shuffledOrder;
+    this.state.currentPlayerIndex = 0;
+    // Reset player words
+    this.state.players.forEach(p => {
+      p.currentWord = undefined;
+      p.wordType = undefined;
+    });
     this.usedWords.clear();
   }
 
