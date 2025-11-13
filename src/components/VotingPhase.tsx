@@ -146,19 +146,81 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     }
   };
 
-  const handleCalculateResults = useCallback(() => {
+  const handleCalculateResults = useCallback(async () => {
     const result = game.calculateVotingResult();
-    setGameState(game.getState());
+    const newState = game.getState();
+    setGameState(newState);
     
     if (result.isTie) {
-      // Show tie results (anonymous vote counts)
-      setIsTieBreak(true);
+      // Show tie results - just option to revote
+      setIsTieBreak(false); // Don't do tie-break voting, just show revote option
       setTiedPlayers(result.tiedPlayers);
       setShowTieResults(true);
+      
+      // Sync tie to server
+      if (roomId && gameState.isOnline) {
+        try {
+          await fetch('/api/rooms/game-state', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              roomId,
+              gameStateData: {
+                currentPlayerIndex: newState.currentPlayerIndex,
+                votingPhase: newState.votingPhase,
+                votingActivated: newState.votingActivated,
+                isTie: true,
+                tiedPlayers: result.tiedPlayers.map(p => ({ id: p.id, name: p.name, votes: p.votes || 0 })),
+                playerWords: newState.players.reduce((acc, p) => {
+                  if (p.currentWord) {
+                    acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
+                  }
+                  return acc;
+                }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
+              }
+            })
+          });
+        } catch (error) {
+          console.error('Error syncing tie result:', error);
+        }
+      }
     } else if (result.wasWrong) {
       // Wrong elimination
       setShowWrongElimination(true);
       setEliminatedPlayer(result.eliminated);
+      
+      // Sync wrong elimination to server
+      if (roomId && gameState.isOnline && result.eliminated) {
+        try {
+          await fetch('/api/rooms/game-state', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              roomId,
+              gameStateData: {
+                currentPlayerIndex: newState.currentPlayerIndex,
+                votingPhase: newState.votingPhase,
+                votingActivated: newState.votingActivated,
+                eliminatedPlayer: {
+                  id: result.eliminated.id,
+                  name: result.eliminated.name,
+                  wordType: result.eliminated.wordType,
+                  votes: result.eliminated.votes || 0
+                },
+                wrongElimination: true,
+                playerWords: newState.players.reduce((acc, p) => {
+                  if (p.currentWord) {
+                    acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
+                  }
+                  return acc;
+                }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
+              }
+            })
+          });
+        } catch (error) {
+          console.error('Error syncing wrong elimination:', error);
+        }
+      }
     } else {
       // Correct elimination - show confetti if imposter/other word found
       if (result.eliminated && (result.eliminated.wordType === 'imposter' || result.eliminated.wordType === 'similar')) {
@@ -166,28 +228,122 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       }
       setShowResults(true);
       setEliminatedPlayer(result.eliminated);
+      
+      // Sync elimination to server
+      if (roomId && gameState.isOnline && result.eliminated) {
+        try {
+          await fetch('/api/rooms/game-state', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              roomId,
+              gameStateData: {
+                currentPlayerIndex: newState.currentPlayerIndex,
+                votingPhase: newState.votingPhase,
+                votingActivated: newState.votingActivated,
+                eliminatedPlayer: {
+                  id: result.eliminated.id,
+                  name: result.eliminated.name,
+                  wordType: result.eliminated.wordType,
+                  votes: result.eliminated.votes || 0
+                },
+                wrongElimination: false,
+                playerWords: newState.players.reduce((acc, p) => {
+                  if (p.currentWord) {
+                    acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
+                  }
+                  return acc;
+                }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
+              }
+            })
+          });
+        } catch (error) {
+          console.error('Error syncing elimination result:', error);
+        }
+      }
     }
-  }, [game]);
+  }, [game, roomId, gameState.isOnline]);
 
-  const handleRevote = () => {
+  const handleRevote = async () => {
     game.revote();
-    setGameState(game.getState());
+    const newState = game.getState();
+    setGameState(newState);
     setShowTieResults(false);
     setIsTieBreak(false);
     setTiedPlayers([]);
     setSelectedTarget(null);
     setSelectedImposterTarget(null);
     setSelectedOtherWordTarget(null);
+    
+    // Sync revote to server
+    if (roomId && gameState.isOnline) {
+      try {
+        await fetch('/api/rooms/game-state', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            roomId,
+            gameStateData: {
+              currentPlayerIndex: newState.currentPlayerIndex,
+              votingPhase: newState.votingPhase,
+              votingActivated: newState.votingActivated,
+              isTie: false,
+              wrongElimination: false,
+              eliminatedPlayer: undefined,
+              votes: {},
+              playerWords: newState.players.reduce((acc, p) => {
+                if (p.currentWord) {
+                  acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
+                }
+                return acc;
+              }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
+            }
+          })
+        });
+      } catch (error) {
+        console.error('Error syncing revote:', error);
+      }
+    }
   };
 
-  const handleContinueAfterWrongElimination = () => {
+  const handleContinueAfterWrongElimination = async () => {
     game.continueAfterWrongElimination();
-    setGameState(game.getState());
+    const newState = game.getState();
+    setGameState(newState);
     setShowWrongElimination(false);
     setEliminatedPlayer(null);
     setSelectedTarget(null);
     setSelectedImposterTarget(null);
     setSelectedOtherWordTarget(null);
+    
+    // Sync continue after wrong elimination to server
+    if (roomId && gameState.isOnline) {
+      try {
+        await fetch('/api/rooms/game-state', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            roomId,
+            gameStateData: {
+              currentPlayerIndex: newState.currentPlayerIndex,
+              votingPhase: newState.votingPhase,
+              votingActivated: newState.votingActivated,
+              wrongElimination: false,
+              eliminatedPlayer: undefined,
+              votes: {},
+              playerWords: newState.players.reduce((acc, p) => {
+                if (p.currentWord) {
+                  acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
+                }
+                return acc;
+              }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
+            }
+          })
+        });
+      } catch (error) {
+        console.error('Error syncing continue after wrong elimination:', error);
+      }
+    }
   };
 
   const handleActivateVoting = async () => {
@@ -287,6 +443,39 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               });
             }
             
+            // Sync voting results from server
+            if (serverState.isTie !== undefined && serverState.isTie && !showTieResults) {
+              setShowTieResults(true);
+              if (serverState.tiedPlayers) {
+                const currentState = game.getState();
+                const tiedPlayersFromServer = serverState.tiedPlayers.map((tp: { id: number; name: string; votes: number }) => {
+                  const player = currentState.players.find(p => p.id === tp.id);
+                  return player || { id: tp.id, name: tp.name, votes: tp.votes };
+                });
+                setTiedPlayers(tiedPlayersFromServer);
+              }
+            }
+            
+            if (serverState.eliminatedPlayer && !showResults && !showWrongElimination && !showTieResults) {
+              const currentState = game.getState();
+              const eliminated = currentState.players.find(p => p.id === serverState.eliminatedPlayer.id);
+              if (eliminated) {
+                eliminated.isEliminated = true;
+                eliminated.votes = serverState.eliminatedPlayer.votes || 0;
+                setEliminatedPlayer(eliminated);
+                
+                if (serverState.wrongElimination) {
+                  setShowWrongElimination(true);
+                } else {
+                  setShowResults(true);
+                  if (eliminated.wordType === 'imposter' || eliminated.wordType === 'similar') {
+                    setShowConfetti(true);
+                  }
+                }
+                stateChanged = true;
+              }
+            }
+            
             // Sync emotes
             if (data.room.gameStateData.emotes) {
               const recentEmotes = data.room.gameStateData.emotes
@@ -326,37 +515,13 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       setGameState(newState);
       
       // Check if all players have voted
-      const tiedIds = isTieBreak ? tiedPlayers.map(p => p.id) : undefined;
-      if (game.allPlayersVoted(tiedIds) && !showResults && !showTieResults && !showWrongElimination) {
-        if (isTieBreak) {
-          // Handle tie-break results
-          const result = game.calculateVotingResult();
-          if (!result.isTie) {
-            if (result.wasWrong) {
-              setShowWrongElimination(true);
-              setEliminatedPlayer(result.eliminated);
-            } else {
-              setShowResults(true);
-              setEliminatedPlayer(result.eliminated);
-            }
-          } else {
-            // Still tied, continue tie-break
-            const newTiedIds = result.tiedPlayers.map(p => p.id);
-            setTiedPlayers(result.tiedPlayers);
-            game.startTieBreakVote(newTiedIds);
-            setGameState(game.getState());
-            setSelectedTarget(null);
-            setSelectedImposterTarget(null);
-            setSelectedOtherWordTarget(null);
-          }
-        } else {
-          handleCalculateResults();
-        }
+      if (game.allPlayersVoted() && !showResults && !showTieResults && !showWrongElimination) {
+        handleCalculateResults();
       }
     }, 500); // Check every 500ms for updates
 
     return () => clearInterval(interval);
-  }, [game, showResults, isTieBreak, tiedPlayers, handleCalculateResults, showTieResults, showWrongElimination]);
+  }, [game, showResults, tiedPlayers, handleCalculateResults, showTieResults, showWrongElimination]);
 
   const handleContinueAfterElimination = () => {
     onVoteComplete();
@@ -486,8 +651,8 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     );
   }
 
-  // Tie results screen (anonymous vote counts)
-  if (showTieResults && isTieBreak) {
+  // Tie results screen - simplified, just revote option
+  if (showTieResults) {
     return (
       <div className="max-w-2xl mx-auto">
         <Card className="border-yellow-500 border-2">
@@ -496,18 +661,8 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-center text-muted-foreground">
-              יש שוויון בקולות. ספירת הקולות (ללא שמות):
+              יש שוויון בקולות. המארח יכול להפעיל הצבעה מחדש.
             </p>
-            <div className="space-y-2">
-              {votingResults
-                .filter(r => tiedPlayers.some(tp => tp.id === r.player.id))
-                .map((result, index) => (
-                  <div key={index} className="flex justify-between items-center p-3 bg-yellow-50 rounded-lg">
-                    <span className="text-sm text-muted-foreground">שחקן #{index + 1}</span>
-                    <span className="text-lg font-bold">{result.votes} קולות</span>
-                  </div>
-                ))}
-            </div>
             {isAdmin && (
               <Button onClick={handleRevote} size="lg" className="w-full mt-4">
                 הצבעה מחדש
@@ -592,17 +747,11 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     );
   }
 
-  // If tie-break, show only tied players (excluding current player)
-  const playersToShow = isTieBreak 
-    ? activePlayers.filter(p => 
-        tiedPlayers.some(tp => tp.id === p.id) && p.id !== currentPlayerId
-      )
-    : activePlayers.filter(p => p.id !== currentPlayerId);
+  // Show all active players (excluding current player)
+  const playersToShow = activePlayers.filter(p => p.id !== currentPlayerId);
   
-  // In tie-break, only tied players can vote
-  const canVote = isTieBreak 
-    ? tiedPlayers.some(tp => tp.id === currentPlayerId) && !hasVoted
-    : !hasVoted;
+  // Can vote if not voted yet
+  const canVote = !hasVoted;
 
   // Check voting progress for both mode
   const hasVotedImposter = currentPlayer?.votedForImposter !== undefined;
@@ -643,14 +792,9 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       <Card>
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">
-            {isTieBreak ? `סיבוב הצבעה ${gameState.votingRound} - שבירת שוויון` : 'שלב ההצבעה'}
+            שלב ההצבעה
           </CardTitle>
-          {isTieBreak && (
-            <p className="text-muted-foreground mt-2">
-              יש שוויון! הצביעו רק בין השחקנים הקשורים
-            </p>
-          )}
-          {isBothMode && !isTieBreak && (
+          {isBothMode && (
             <p className="text-muted-foreground mt-2">
               יש לך 2 קולות: אחד למתחזה ואחד למילה דומה
             </p>
@@ -681,15 +825,10 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                 {!hasVotedOtherWord && <p className="text-xs text-orange-600">✗ עדיין צריך להצביע למילה דומה</p>}
               </div>
             )}
-            {isTieBreak && !tiedPlayers.some(tp => tp.id === currentPlayerId) && (
-              <p className="text-sm text-orange-600 mt-2">
-                אינך חלק מהשוויון, ממתין לתוצאות
-              </p>
-            )}
           </div>
 
           {/* Voting Section - Both Mode */}
-          {isBothMode && !isTieBreak && !bothVotesComplete && playersToShow.length > 0 && (
+          {isBothMode && !bothVotesComplete && playersToShow.length > 0 && (
             <div className="space-y-6">
               {/* Imposter Vote */}
               {!hasVotedImposter && (

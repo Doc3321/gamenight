@@ -29,7 +29,10 @@ export interface GameRoom {
     currentPlayerIndex: number;
     votingPhase: boolean;
     votingActivated: boolean;
-    eliminatedPlayer?: { id: number; name: string };
+    eliminatedPlayer?: { id: number; name: string; wordType?: 'normal' | 'similar' | 'imposter'; votes?: number };
+    isTie?: boolean;
+    tiedPlayers?: Array<{ id: number; name: string; votes: number }>;
+    wrongElimination?: boolean;
     playerWords?: Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>;
     votes?: Record<string, { voterId: number; targetId: number; voteType?: 'imposter' | 'other-word' }>;
     emotes?: Array<{ playerId: number; emote: string; timestamp: number }>;
