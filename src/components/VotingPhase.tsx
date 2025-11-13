@@ -10,6 +10,8 @@ import Confetti from './Confetti';
 import PlayerAvatar from './PlayerAvatar';
 import ClassifiedStamp from './ClassifiedStamp';
 import AgentBadge from './AgentBadge';
+import AgentSpinner from './AgentSpinner';
+import AgentScanLine from './AgentScanLine';
 
 interface VotingPhaseProps {
   game: WordGame;
@@ -236,16 +238,39 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   // Admin activation screen (online mode only)
   if (gameState.isOnline && !gameState.votingActivated && isAdmin) {
     return (
-      <div className="max-w-2xl mx-auto">
-        <Card>
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl">הפעל הצבעה</CardTitle>
+      <div className="max-w-2xl mx-auto relative">
+        <ClassifiedStamp level="TOP SECRET" />
+        <AgentScanLine />
+        <Card className="relative overflow-hidden border-2 border-purple-500/30 dark:border-purple-400/50">
+          <CardHeader className="text-center relative">
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <CardTitle className="text-3xl font-mono tracking-wider bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 bg-clip-text text-transparent">
+                הפעל הצבעה
+              </CardTitle>
+              <p className="text-xs text-muted-foreground uppercase tracking-widest mt-2">
+                ACTIVATE VOTING PHASE
+              </p>
+            </motion.div>
           </CardHeader>
-          <CardContent className="text-center space-y-4">
+          <CardContent className="text-center space-y-6 relative">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.2 }}
+            >
+              <AgentSpinner size="md" />
+            </motion.div>
             <p className="text-muted-foreground">
               כל השחקנים קיבלו את המילים שלהם. לחץ כדי להתחיל את שלב ההצבעה.
             </p>
-            <Button onClick={handleActivateVoting} size="lg">
+            <Button 
+              onClick={handleActivateVoting} 
+              size="lg"
+              className="bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 hover:from-purple-700 hover:via-pink-700 hover:to-orange-600 shadow-lg text-white font-semibold"
+            >
               הפעל הצבעה
             </Button>
           </CardContent>
@@ -257,12 +282,25 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   // Waiting for admin to activate (online mode)
   if (gameState.isOnline && !gameState.votingActivated && !isAdmin) {
     return (
-      <div className="max-w-2xl mx-auto">
-        <Card>
+      <div className="max-w-2xl mx-auto relative">
+        <ClassifiedStamp level="SECRET" />
+        <AgentScanLine />
+        <Card className="relative overflow-hidden border-2 border-purple-500/30 dark:border-purple-400/50">
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl">ממתין להפעלת הצבעה</CardTitle>
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <CardTitle className="text-3xl font-mono tracking-wider bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 bg-clip-text text-transparent">
+                ממתין להפעלת הצבעה
+              </CardTitle>
+              <p className="text-xs text-muted-foreground uppercase tracking-widest mt-2">
+                AWAITING HOST AUTHORIZATION
+              </p>
+            </motion.div>
           </CardHeader>
-          <CardContent className="text-center">
+          <CardContent className="text-center space-y-6">
+            <AgentSpinner size="lg" message="ממתין למארח..." />
             <p className="text-muted-foreground">
               המארח צריך להפעיל את שלב ההצבעה
             </p>

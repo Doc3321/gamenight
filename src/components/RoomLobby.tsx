@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import PlayerAvatar from './PlayerAvatar';
 import AgentBadge from './AgentBadge';
 import ClassifiedStamp from './ClassifiedStamp';
+import AgentSpinner from './AgentSpinner';
 import { GameRoom, GameMode } from '@/lib/roomManager';
 
 interface RoomLobbyProps {
@@ -43,7 +44,22 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
           if (data.room) {
             setLocalRoom(data.room);
             onRoomUpdate?.(data.room);
+            
+            // Check if current player was removed
+            const playerStillExists = data.room.players.find((p: { id: string }) => p.id === currentPlayerId);
+            if (!playerStillExists) {
+              toast.error('הוסרת מהחדר');
+              onLeaveRoom();
+            }
+          } else {
+            // Room doesn't exist anymore
+            toast.error('החדר נמחק');
+            onLeaveRoom();
           }
+        } else if (response.status === 404) {
+          // Room not found
+          toast.error('החדר לא נמצא');
+          onLeaveRoom();
         }
       } catch (error) {
         console.error('Error fetching room updates:', error);
@@ -52,7 +68,7 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
     
     const interval = setInterval(fetchRoomUpdates, 2000); // Poll every 2 seconds
     return () => clearInterval(interval);
-  }, [localRoom.id, localRoom.gameState, onRoomUpdate]);
+  }, [localRoom.id, localRoom.gameState, onRoomUpdate, currentPlayerId, onLeaveRoom]);
   
   const isHost = localRoom.players.find(p => p.id === currentPlayerId)?.isHost || false;
   const currentPlayer = localRoom.players.find(p => p.id === currentPlayerId);
@@ -208,9 +224,20 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
               onClick={handleToggleReady}
               disabled={isTogglingReady}
               variant={currentPlayer?.isReady ? 'outline' : 'default'}
-              className="w-full"
+              className={`w-full ${
+                !currentPlayer?.isReady 
+                  ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg' 
+                  : ''
+              }`}
             >
-              {currentPlayer?.isReady ? 'לא מוכן' : 'מוכן'}
+              {isTogglingReady ? (
+                <div className="flex items-center gap-2 justify-center">
+                  <AgentSpinner size="sm" />
+                  <span>מעדכן...</span>
+                </div>
+              ) : (
+                currentPlayer?.isReady ? 'לא מוכן' : 'מוכן'
+              )}
             </Button>
           </div>
         </CardContent>
@@ -287,7 +314,13 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
               </p>
             )}
             
-            {!allPlayersReady && localRoom.players.length >= 2 && (
+            {localRoom.players.length >= 8 && (
+              <p className="text-sm text-yellow-600 text-center">
+                החדר מלא (8/8 שחקנים)
+              </p>
+            )}
+            
+            {!allPlayersReady && localRoom.players.length >= 2 && localRoom.players.length < 8 && (
               <p className="text-sm text-orange-600 text-center">
                 ממתין שכל השחקנים יהיו מוכנים
               </p>

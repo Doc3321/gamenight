@@ -38,6 +38,7 @@ export interface GameRoom {
 export class RoomManager {
   private rooms: Map<string, GameRoom> = new Map();
   private playerRooms: Map<string, string> = new Map(); // playerId -> roomId
+  private roomCleanupTimers: Map<string, NodeJS.Timeout> = new Map();
 
   createRoom(hostId: string, hostName: string): GameRoom {
     const roomId = this.generateRoomId();
@@ -60,10 +61,17 @@ export class RoomManager {
     this.rooms.set(roomId, room);
     this.playerRooms.set(hostId, roomId);
     
+    // Cancel any cleanup timer for this room
+    const timer = this.roomCleanupTimers.get(roomId);
+    if (timer) {
+      clearTimeout(timer);
+      this.roomCleanupTimers.delete(roomId);
+    }
+    
     return room;
   }
 
-  joinRoom(roomId: string, playerId: string, playerName: string): GameRoom | null {
+  joinRoom(roomId: string, playerId: string, playerName: string, maxPlayers: number = 8): GameRoom | null {
     const room = this.rooms.get(roomId);
     if (!room || room.gameState !== 'waiting') {
       return null;
@@ -72,6 +80,17 @@ export class RoomManager {
     // Check if player already in room
     if (room.players.some(p => p.id === playerId)) {
       return room;
+    }
+
+    // Check room capacity
+    if (room.players.length >= maxPlayers) {
+      return null;
+    }
+
+    // Check for duplicate names (case-insensitive)
+    const normalizedName = playerName.trim().toLowerCase();
+    if (room.players.some(p => p.name.trim().toLowerCase() === normalizedName)) {
+      return null;
     }
 
     room.players.push({
@@ -104,9 +123,27 @@ export class RoomManager {
       room.hostId = room.players[0].id;
     }
 
-    // If no players left, delete room
+    // If no players left, schedule room cleanup (delete after 5 minutes)
     if (room.players.length === 0) {
-      this.rooms.delete(roomId);
+      const timer = setTimeout(() => {
+        this.rooms.delete(roomId);
+        this.roomCleanupTimers.delete(roomId);
+      }, 5 * 60 * 1000); // 5 minutes
+      
+      // Clear existing timer if any
+      const existingTimer = this.roomCleanupTimers.get(roomId);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+      }
+      
+      this.roomCleanupTimers.set(roomId, timer);
+    } else {
+      // Cancel cleanup if room has players again
+      const timer = this.roomCleanupTimers.get(roomId);
+      if (timer) {
+        clearTimeout(timer);
+        this.roomCleanupTimers.delete(roomId);
+      }
     }
 
     this.playerRooms.delete(playerId);

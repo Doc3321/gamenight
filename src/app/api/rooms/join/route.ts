@@ -32,6 +32,15 @@ export async function POST(request: NextRequest) {
       if (existingRoom.players.some(p => p.id === playerId)) {
         return NextResponse.json({ room: existingRoom });
       }
+      // Check if room is full
+      if (existingRoom.players.length >= 8) {
+        return NextResponse.json({ error: 'החדר מלא. מקסימום 8 שחקנים.' }, { status: 400 });
+      }
+      // Check for duplicate name
+      const normalizedName = playerName.trim().toLowerCase();
+      if (existingRoom.players.some(p => p.name.trim().toLowerCase() === normalizedName)) {
+        return NextResponse.json({ error: 'שם זה כבר תפוס בחדר. בחר שם אחר.' }, { status: 400 });
+      }
       return NextResponse.json({ error: 'לא ניתן להצטרף לחדר' }, { status: 400 });
     }
 

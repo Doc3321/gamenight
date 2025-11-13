@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import VotingPhase from './VotingPhase';
 import PlayerAvatar from './PlayerAvatar';
 import ClassifiedStamp from './ClassifiedStamp';
+import AgentSpinner from './AgentSpinner';
+import AgentScanLine from './AgentScanLine';
 
 interface GameBoardProps {
   game: WordGame;
@@ -24,10 +26,23 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
   const [showResult, setShowResult] = useState(false);
   const [isFirstSpin, setIsFirstSpin] = useState(true);
   const [currentVotingPlayerIndex, setCurrentVotingPlayerIndex] = useState(0);
+  const [spinProgress, setSpinProgress] = useState(0);
 
   const handleSpin = () => {
     setIsSpinning(true);
     setShowResult(false);
+    setSpinProgress(0);
+    
+    // Animate progress
+    const progressInterval = setInterval(() => {
+      setSpinProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(progressInterval);
+          return 100;
+        }
+        return prev + 2;
+      });
+    }, 40);
     
     // Simulate spinning delay
     setTimeout(() => {
@@ -36,6 +51,8 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
         setGameState(game.getState());
         setIsSpinning(false);
         setShowResult(true);
+        setSpinProgress(100);
+        clearInterval(progressInterval);
       }
     }, 2000);
   };
@@ -284,9 +301,19 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
             )}
             
             {isSpinning && (
-              <div className="text-center">
-                <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
-                <p>סובב...</p>
+              <div className="text-center space-y-4">
+                <AgentSpinner size="md" message="מאמת מילה..." />
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                  <motion.div
+                    className="h-full bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${spinProgress}%` }}
+                    transition={{ duration: 0.1 }}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">
+                  {spinProgress}%
+                </p>
               </div>
             )}
           </CardContent>
@@ -369,13 +396,16 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                     className="text-center text-muted-foreground py-8"
                   >
                     {isSpinning ? (
-                      <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                        className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"
-                      />
-                    ) : null}
-                    {isSpinning ? 'סובב...' : 'לחץ על "סובב" כדי לקבל את המילה שלך'}
+                      <div className="relative">
+                        <AgentSpinner size="lg" message="מאמת מילה..." />
+                        <AgentScanLine />
+                      </div>
+                    ) : (
+                      <div className="text-muted-foreground">
+                        <p className="text-lg mb-2">לחץ על "סובב" כדי לקבל את המילה שלך</p>
+                        <p className="text-xs font-mono uppercase tracking-wider opacity-70">CLASSIFIED INFORMATION</p>
+                      </div>
+                    )}
                   </motion.div>
                 );
               })()}

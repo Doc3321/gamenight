@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import ClassifiedStamp from './ClassifiedStamp';
+import AgentSpinner from './AgentSpinner';
 
 interface JoinRoomProps {
   onJoinRoom: (roomId: string, playerName: string) => void;
@@ -179,7 +180,14 @@ export default function JoinRoom({ onJoinRoom, onCreateRoom }: JoinRoomProps) {
             className="w-full bg-gradient-to-r from-pink-600 to-orange-500 hover:from-pink-700 hover:to-orange-600 shadow-lg text-white font-semibold"
             size="lg"
           >
-            {isCreating ? 'יוצר...' : '✨ צור חדר חדש'}
+            {isCreating ? (
+              <div className="flex items-center gap-2 justify-center">
+                <AgentSpinner size="sm" />
+                <span>יוצר...</span>
+              </div>
+            ) : (
+              '✨ צור חדר חדש'
+            )}
           </Button>
         </CardContent>
       </Card>

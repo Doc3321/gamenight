@@ -164,6 +164,16 @@ export default function Home() {
   };
 
   const leaveRoom = () => {
+    const isAdmin = room?.hostId === currentPlayerId;
+    const isInGame = game !== null;
+    
+    // Warn admin if leaving during game
+    if (isAdmin && isInGame) {
+      if (!confirm('אתה המארח במשחק פעיל. האם אתה בטוח שברצונך לעזוב? המשחק יסתיים עבור כל השחקנים.')) {
+        return;
+      }
+    }
+    
     // Leave room on server
     if (currentPlayerId) {
       fetch('/api/rooms/leave', {
@@ -176,18 +186,36 @@ export default function Home() {
     setRoom(null);
     setCurrentPlayerId('');
     setGameStarted(false);
+    setGame(null);
+    localStorage.removeItem('roomId');
     // Don't clear playerId from localStorage - keep it for reconnection
   };
 
+  // Handle browser navigation/close - warn admin if leaving during game
+  useEffect(() => {
+    if (appMode !== 'online' || !room) return;
+    
+    const isAdmin = room.hostId === currentPlayerId;
+    const isInGame = game !== null;
+    
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isAdmin && isInGame) {
+        e.preventDefault();
+        e.returnValue = 'אתה המארח במשחק פעיל. האם אתה בטוח שברצונך לעזוב?';
+        return e.returnValue;
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [appMode, room, currentPlayerId, game]);
+
   // Show loading while reconnecting
   if (isReconnecting && appMode === 'online') {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 dark:from-gray-900 dark:via-purple-900 dark:to-gray-800 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-2xl font-bold mb-4">מתחבר...</div>
-        </div>
-      </div>
-    );
+    return <AgentLoadingScreen message="מתחבר..." subMessage="מאמת זהות סוכן" />;
   }
 
   // Online mode - show join/create room
