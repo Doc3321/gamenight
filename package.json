@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
@@ -36,9 +36,5 @@
   },
   "engines": {
     "node": ">=18.0.0"
-  },
-  "vercel": {
-    "buildCommand": "npm run build",
-    "outputDirectory": ".next"
   }
 }
