@@ -14,9 +14,11 @@ interface GameBoardProps {
   onReset: () => void;
   isAdmin?: boolean; // For online mode
   currentPlayerId?: number; // For online mode - the game player ID of current viewer
+  roomId?: string; // For online mode - room ID for real-time sync
+  currentPlayerIdString?: string; // For online mode - the string player ID
 }
 
-export default function GameBoard({ game, onReset, isAdmin = false, currentPlayerId: viewingPlayerId }: GameBoardProps) {
+export default function GameBoard({ game, onReset, isAdmin = false, currentPlayerId: viewingPlayerId, roomId, currentPlayerIdString }: GameBoardProps) {
   const [isSpinning, setIsSpinning] = useState(false);
   const [gameState, setGameState] = useState(game.getState());
   const [showResult, setShowResult] = useState(false);
@@ -121,6 +123,8 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
             currentPlayerId={viewingPlayerId}
             onVoteComplete={handleVoteComplete}
             isAdmin={isAdmin}
+            roomId={roomId}
+            currentPlayerIdString={currentPlayerIdString}
           />
         );
       }
@@ -150,6 +154,8 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
             currentPlayerId={nextVoter.id}
             onVoteComplete={handleVoteComplete}
             isAdmin={isAdmin}
+            roomId={roomId}
+            currentPlayerIdString={currentPlayerIdString}
           />
         );
       } else {

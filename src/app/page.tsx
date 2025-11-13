@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { WordGame, GameMode as GameModeType } from '@/lib/gameLogic';
 import { wordTopics } from '@/data/wordTopics';
@@ -47,6 +47,7 @@ export default function Home() {
   // Online game state
   const [room, setRoom] = useState<GameRoom | null>(null);
   const [currentPlayerId, setCurrentPlayerId] = useState<string>('');
+  const [isReconnecting, setIsReconnecting] = useState(true);
 
   const startNewGame = (gameMode: GameModeType = 'similar-word', players: GamePlayer[] = [], isOnline: boolean = false) => {
     const topic = wordTopics.find(t => t.id === selectedTopic);
@@ -73,11 +74,18 @@ export default function Home() {
 
   const createRoom = async (hostName: string) => {
     try {
+      // Generate or retrieve persistent playerId
+      let playerId = localStorage.getItem('playerId');
+      if (!playerId) {
+        playerId = `player_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        localStorage.setItem('playerId', playerId);
+      }
+      
       const response = await fetch('/api/rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          hostId: `player_${Date.now()}`,
+          hostId: playerId,
           hostName 
         })
       });
@@ -86,7 +94,8 @@ export default function Home() {
       if (data.room) {
         setRoom(data.room);
         setCurrentPlayerId(data.room.hostId);
-        setGameStarted(true);
+        setGameStarted(false); // Show lobby, don't start game immediately
+        localStorage.setItem('roomId', data.room.id);
       }
     } catch (error) {
       console.error('Error creating room:', error);
@@ -95,12 +104,19 @@ export default function Home() {
 
   const joinRoom = async (roomId: string, playerName: string) => {
     try {
+      // Generate or retrieve persistent playerId
+      let playerId = localStorage.getItem('playerId');
+      if (!playerId) {
+        playerId = `player_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        localStorage.setItem('playerId', playerId);
+      }
+      
       const response = await fetch('/api/rooms/join', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           roomId: roomId.toUpperCase().trim(),
-          playerId: `player_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          playerId: playerId,
           playerName: playerName.trim()
         })
       });
@@ -113,8 +129,16 @@ export default function Home() {
       
       if (data.room) {
         setRoom(data.room);
-        setCurrentPlayerId(data.room.players.find((p: Player) => p.name === playerName.trim())?.id || '');
+        // Find player by ID (not by name, in case of duplicates)
+        const player = data.room.players.find((p: Player) => p.id === playerId);
+        if (player) {
+          setCurrentPlayerId(player.id);
+        } else {
+          // Fallback: find by name
+          setCurrentPlayerId(data.room.players.find((p: Player) => p.name === playerName.trim())?.id || '');
+        }
         setGameStarted(false); // Don't start game immediately, show lobby
+        localStorage.setItem('roomId', data.room.id);
       } else {
         throw new Error('Room not found');
       }
@@ -147,6 +171,7 @@ export default function Home() {
             name: p.name
           }));
           startNewGame(gameMode, gamePlayers, true); // isOnline = true
+          localStorage.setItem('roomId', data.room.id);
         }
       }
     } catch (error) {
@@ -155,10 +180,31 @@ export default function Home() {
   };
 
   const leaveRoom = () => {
+    // Leave room on server
+    if (currentPlayerId) {
+      fetch('/api/rooms/leave', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerId: currentPlayerId })
+      }).catch(console.error);
+    }
+    
     setRoom(null);
     setCurrentPlayerId('');
     setGameStarted(false);
+    // Don't clear playerId from localStorage - keep it for reconnection
   };
+
+  // Show loading while reconnecting
+  if (isReconnecting && appMode === 'online') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 dark:from-gray-900 dark:via-purple-900 dark:to-gray-800 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-2xl font-bold mb-4">מתחבר...</div>
+        </div>
+      </div>
+    );
+  }
 
   // Online mode - show join/create room
   if (appMode === 'online' && !room) {
@@ -198,6 +244,15 @@ export default function Home() {
               currentPlayerId={currentPlayerId}
               onStartGame={startOnlineGame}
               onLeaveRoom={leaveRoom}
+              onRoomUpdate={(updatedRoom) => {
+                setRoom(updatedRoom);
+                // Update currentPlayerId if player still exists
+                const playerStillExists = updatedRoom.players.find(p => p.id === currentPlayerId);
+                if (!playerStillExists) {
+                  // Player was removed, leave room
+                  leaveRoom();
+                }
+              }}
             />
           </motion.div>
         </div>
@@ -354,6 +409,8 @@ export default function Home() {
                   return roomPlayer && p.name === roomPlayer.name;
                 }) + 1
               : undefined}
+            roomId={appMode === 'online' ? room?.id : undefined}
+            currentPlayerIdString={appMode === 'online' ? currentPlayerId : undefined}
           />
         </motion.div>
       </div>

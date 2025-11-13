@@ -10,6 +10,14 @@ export async function POST(request: NextRequest) {
     }
 
     const normalizedRoomId = roomId.toUpperCase().trim();
+    
+    // Check if player is already in a different room
+    const existingPlayerRoom = roomManager.getPlayerRoom(playerId);
+    if (existingPlayerRoom && existingPlayerRoom.id !== normalizedRoomId) {
+      // Player is trying to join a different room, leave current room first
+      roomManager.leaveRoom(playerId);
+    }
+    
     const room = roomManager.joinRoom(normalizedRoomId, playerId, playerName.trim());
     
     if (!room) {
@@ -19,6 +27,10 @@ export async function POST(request: NextRequest) {
       }
       if (existingRoom.gameState !== 'waiting') {
         return NextResponse.json({ error: 'המשחק כבר התחיל. לא ניתן להצטרף.' }, { status: 400 });
+      }
+      // Check if player is already in this room
+      if (existingRoom.players.some(p => p.id === playerId)) {
+        return NextResponse.json({ room: existingRoom });
       }
       return NextResponse.json({ error: 'לא ניתן להצטרף לחדר' }, { status: 400 });
     }

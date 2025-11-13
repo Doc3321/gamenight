@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -33,21 +33,51 @@ interface RoomLobbyProps {
   currentPlayerId: string;
   onStartGame: (topic: string, gameMode: GameMode) => void;
   onLeaveRoom: () => void;
+  onRoomUpdate?: (room: GameRoom) => void;
 }
 
-export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveRoom }: RoomLobbyProps) {
+export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveRoom, onRoomUpdate }: RoomLobbyProps) {
   const [selectedTopic, setSelectedTopic] = useState('');
   const [selectedGameMode, setSelectedGameMode] = useState<GameMode>('similar-word');
   const [isStarting, setIsStarting] = useState(false);
   const [isTogglingReady, setIsTogglingReady] = useState(false);
+  const [localRoom, setLocalRoom] = useState(room);
   
-  const isHost = room.players.find(p => p.id === currentPlayerId)?.isHost || false;
-  const currentPlayer = room.players.find(p => p.id === currentPlayerId);
-  const allPlayersReady = room.players.every(p => p.isReady);
-  const canStart = isHost && room.players.length >= 2 && selectedTopic && allPlayersReady;
+  // Update local room when prop changes
+  useEffect(() => {
+    setLocalRoom(room);
+  }, [room]);
+  
+  // Poll for room updates
+  useEffect(() => {
+    if (localRoom.gameState !== 'waiting') return; // Stop polling if game started
+    
+    const fetchRoomUpdates = async () => {
+      try {
+        const response = await fetch(`/api/rooms?roomId=${localRoom.id}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.room) {
+            setLocalRoom(data.room);
+            onRoomUpdate?.(data.room);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching room updates:', error);
+      }
+    };
+    
+    const interval = setInterval(fetchRoomUpdates, 2000); // Poll every 2 seconds
+    return () => clearInterval(interval);
+  }, [localRoom.id, localRoom.gameState, onRoomUpdate]);
+  
+  const isHost = localRoom.players.find(p => p.id === currentPlayerId)?.isHost || false;
+  const currentPlayer = localRoom.players.find(p => p.id === currentPlayerId);
+  const allPlayersReady = localRoom.players.every(p => p.isReady);
+  const canStart = isHost && localRoom.players.length >= 2 && selectedTopic && allPlayersReady;
 
   const copyRoomId = () => {
-    navigator.clipboard.writeText(room.id);
+    navigator.clipboard.writeText(localRoom.id);
     toast.success('מספר החדר הועתק!');
   };
 
@@ -60,7 +90,7 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          roomId: room.id,
+          roomId: localRoom.id,
           playerId: currentPlayerId,
           isReady: !currentPlayer.isReady
         })
@@ -68,6 +98,12 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
       
       if (!response.ok) {
         throw new Error('Failed to update ready status');
+      }
+      
+      const data = await response.json();
+      if (data.room) {
+        setLocalRoom(data.room);
+        onRoomUpdate?.(data.room);
       }
     } catch {
       toast.error('שגיאה בעדכון סטטוס מוכן');
@@ -133,7 +169,7 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
           <div className="flex items-center gap-2">
             <span className="font-medium">מספר החדר:</span>
             <Badge variant="secondary" className="text-lg font-mono">
-              {room.id}
+              {localRoom.id}
             </Badge>
             <Button size="sm" variant="outline" onClick={copyRoomId}>
               <Copy className="w-4 h-4" />
@@ -143,7 +179,7 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
           <div className="flex items-center gap-2">
             <Users className="w-5 h-5" />
             <span className="font-medium">
-              שחקנים ({room.players.length})
+              שחקנים ({localRoom.players.length})
             </span>
           </div>
         </CardContent>
@@ -155,7 +191,7 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            {room.players.map((player, index) => (
+            {localRoom.players.map((player, index) => (
               <div
                 key={player.id}
                 className="flex items-center justify-between p-3 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg border-2 border-transparent hover:border-purple-300 dark:hover:border-purple-600 transition-all"
@@ -264,13 +300,13 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
               {isStarting ? 'מתחיל...' : 'התחל משחק'}
             </Button>
             
-            {room.players.length < 2 && (
+            {localRoom.players.length < 2 && (
               <p className="text-sm text-muted-foreground text-center">
                 צריך לפחות 2 שחקנים כדי להתחיל
               </p>
             )}
             
-            {!allPlayersReady && room.players.length >= 2 && (
+            {!allPlayersReady && localRoom.players.length >= 2 && (
               <p className="text-sm text-orange-600 text-center">
                 ממתין שכל השחקנים יהיו מוכנים
               </p>

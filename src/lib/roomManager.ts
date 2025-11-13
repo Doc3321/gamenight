@@ -23,6 +23,16 @@ export interface GameRoom {
   totalSpins: number;
   spinOrder: (boolean | 'similar' | 'imposter')[];
   createdAt: Date;
+  // Real-time game state
+  gameStateData?: {
+    currentPlayerIndex: number;
+    votingPhase: boolean;
+    votingActivated: boolean;
+    eliminatedPlayer?: { id: number; name: string };
+    playerWords?: Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>;
+    votes?: Record<string, { voterId: number; targetId: number; voteType?: 'imposter' | 'other-word' }>;
+    emotes?: Array<{ playerId: number; emote: string; timestamp: number }>;
+  };
 }
 
 export class RoomManager {

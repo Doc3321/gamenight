@@ -16,9 +16,11 @@ interface VotingPhaseProps {
   currentPlayerId: number; // The player who is currently voting
   onVoteComplete: () => void;
   isAdmin?: boolean; // Whether current player is admin (for online mode)
+  roomId?: string; // For online mode - room ID for real-time sync
+  currentPlayerIdString?: string; // For online mode - the string player ID
 }
 
-export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isAdmin = false }: VotingPhaseProps) {
+export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isAdmin = false, roomId, currentPlayerIdString }: VotingPhaseProps) {
   const [selectedTarget, setSelectedTarget] = useState<number | null>(null);
   const [selectedImposterTarget, setSelectedImposterTarget] = useState<number | null>(null);
   const [selectedOtherWordTarget, setSelectedOtherWordTarget] = useState<number | null>(null);
@@ -68,11 +70,28 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     }
   };
 
-  const handleEmote = (emote: EmoteType) => {
+  const handleEmote = async (emote: EmoteType) => {
     const currentPlayer = gameState.players.find(p => p.id === currentPlayerId);
     if (currentPlayer) {
       const emoteId = Date.now();
       setActiveEmotes(prev => [...prev, { id: emoteId, emote, playerName: currentPlayer.name }]);
+      
+      // Send emote to server for real-time sync (online mode)
+      if (roomId && currentPlayerIdString && gameState.isOnline) {
+        try {
+          await fetch('/api/rooms/emote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              roomId,
+              playerId: currentPlayerIdString,
+              emote
+            })
+          });
+        } catch (error) {
+          console.error('Error sending emote:', error);
+        }
+      }
       
       // Remove emote after animation
       setTimeout(() => {
@@ -129,6 +148,41 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     game.activateVoting();
     setGameState(game.getState());
   };
+
+  // Real-time sync for online games
+  useEffect(() => {
+    if (!roomId || !gameState.isOnline) return;
+    
+    const syncGameState = async () => {
+      try {
+        const response = await fetch(`/api/rooms/game-state?roomId=${roomId}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.room?.gameStateData) {
+            // Sync emotes
+            if (data.room.gameStateData.emotes) {
+              const recentEmotes = data.room.gameStateData.emotes
+                .filter((e: { timestamp: number }) => Date.now() - e.timestamp < 5000)
+                .map((e: { playerId: number; emote: string }) => {
+                  const player = gameState.players.find(p => p.id === e.playerId);
+                  return {
+                    id: e.playerId * 1000 + e.timestamp,
+                    emote: e.emote as EmoteType,
+                    playerName: player?.name || 'Unknown'
+                  };
+                });
+              setActiveEmotes(recentEmotes);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error syncing game state:', error);
+      }
+    };
+    
+    const interval = setInterval(syncGameState, 1000); // Poll every second
+    return () => clearInterval(interval);
+  }, [roomId, gameState.isOnline, gameState.players]);
 
   useEffect(() => {
     const interval = setInterval(() => {
