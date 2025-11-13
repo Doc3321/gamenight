@@ -188,17 +188,21 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
             // Update currentPlayerIndex from server
             if (serverState.currentPlayerIndex !== undefined && serverState.currentPlayerIndex !== currentState.currentPlayerIndex) {
               // Directly update the game's internal state
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               (game as any).state.currentPlayerIndex = serverState.currentPlayerIndex;
               // Also update currentSpin to match
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               (game as any).state.currentSpin = serverState.currentPlayerIndex;
               stateChanged = true;
             }
             
             // Sync player words from server
             if (serverState.playerWords) {
-              Object.entries(serverState.playerWords).forEach(([playerIdStr, wordData]: [string, any]) => {
+              type PlayerWordData = { word: string; type: 'normal' | 'similar' | 'imposter' };
+              Object.entries(serverState.playerWords).forEach(([playerIdStr, wordData]: [string, PlayerWordData]) => {
                 const playerId = parseInt(playerIdStr);
-                const player = (game as any).state.players.find((p: any) => p.id === playerId);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const player = (game as any).state.players.find((p: { id: number }) => p.id === playerId);
                 if (player) {
                   if (player.currentWord !== wordData.word) {
                     player.currentWord = wordData.word;
@@ -211,11 +215,13 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
             
             // Update voting phase
             if (serverState.votingPhase !== undefined && serverState.votingPhase !== currentState.votingPhase) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               (game as any).state.votingPhase = serverState.votingPhase;
               stateChanged = true;
             }
             
             if (serverState.votingActivated !== undefined && serverState.votingActivated !== currentState.votingActivated) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               (game as any).state.votingActivated = serverState.votingActivated;
               stateChanged = true;
             }

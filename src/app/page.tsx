@@ -66,7 +66,6 @@ export default function Home() {
         console.log('Game initialized for non-admin player with server data');
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appMode, room, game]);
 
   const startNewGame = (gameMode: GameModeType = 'similar-word', players: GamePlayer[] = [], isOnline: boolean = false, topicId?: string) => {
