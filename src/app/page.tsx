@@ -13,29 +13,9 @@ import RoomLobby from '@/components/RoomLobby';
 import GameSetup from '@/components/GameSetup';
 import { Player as GamePlayer } from '@/lib/gameLogic';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { GameRoom, Player } from '@/lib/roomManager';
 
 type AppMode = 'local' | 'online';
-
-interface Player {
-  id: string;
-  name: string;
-  isHost: boolean;
-  isReady: boolean;
-}
-
-
-interface GameRoom {
-  id: string;
-  hostId: string;
-  players: Player[];
-  gameState: 'waiting' | 'playing' | 'finished';
-  currentTopic?: string;
-  gameWord?: string;
-  gameMode?: GameModeType;
-  currentSpin: number;
-  totalSpins: number;
-  spinOrder: (boolean | 'similar' | 'imposter')[];
-}
 
 export default function Home() {
   const [appMode, setAppMode] = useState<AppMode>('local');
@@ -48,6 +28,10 @@ export default function Home() {
   const [room, setRoom] = useState<GameRoom | null>(null);
   const [currentPlayerId, setCurrentPlayerId] = useState<string>('');
   const [isReconnecting, setIsReconnecting] = useState(true);
+  
+  useEffect(() => {
+    setIsReconnecting(false);
+  }, []);
 
   const startNewGame = (gameMode: GameModeType = 'similar-word', players: GamePlayer[] = [], isOnline: boolean = false) => {
     const topic = wordTopics.find(t => t.id === selectedTopic);
