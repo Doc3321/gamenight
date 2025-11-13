@@ -942,98 +942,108 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
           </div>
 
           {/* Voting Section - Both Mode */}
-          {isBothMode && !bothVotesComplete && playersToShow.length > 0 && (
-            <div className="space-y-6">
-              {/* Imposter Vote */}
-              {!hasVotedImposter && (
-                <div className="space-y-4 p-4 border-2 border-red-200 rounded-lg">
-                  <h3 className="text-lg font-semibold text-center text-red-600">
-                    בחר שחקן למתחזה:
-                  </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    {playersToShow.map((player) => (
-                      <motion.button
-                        key={player.id}
-                        onClick={() => setSelectedImposterTarget(player.id)}
-                        className={`p-4 border-2 rounded-xl transition-all flex flex-col items-center gap-2 ${
-                          selectedImposterTarget === player.id
-                            ? 'border-red-500 bg-gradient-to-br from-red-100 to-orange-100 dark:from-red-900/30 dark:to-orange-900/30 scale-105 shadow-lg'
-                            : 'border-gray-200 dark:border-gray-700 hover:border-red-300 dark:hover:border-red-600'
-                        }`}
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        disabled={selectedOtherWordTarget === player.id}
+          {isBothMode && !bothVotesComplete && (
+            <>
+              {playersToShow.length > 0 ? (
+                <div className="space-y-6">
+                  {/* Imposter Vote */}
+                  {!hasVotedImposter && (
+                    <div className="space-y-4 p-4 border-2 border-red-200 rounded-lg">
+                      <h3 className="text-lg font-semibold text-center text-red-600">
+                        בחר שחקן למתחזה:
+                      </h3>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {playersToShow.map((player) => (
+                          <motion.button
+                            key={player.id}
+                            onClick={() => setSelectedImposterTarget(player.id)}
+                            className={`p-4 border-2 rounded-xl transition-all flex flex-col items-center gap-2 ${
+                              selectedImposterTarget === player.id
+                                ? 'border-red-500 bg-gradient-to-br from-red-100 to-orange-100 dark:from-red-900/30 dark:to-orange-900/30 scale-105 shadow-lg'
+                                : 'border-gray-200 dark:border-gray-700 hover:border-red-300 dark:hover:border-red-600'
+                            }`}
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            disabled={selectedOtherWordTarget === player.id}
+                          >
+                            <PlayerAvatar name={player.name} size="md" isEliminated={player.isEliminated} />
+                            <div className="font-semibold">{player.name}</div>
+                            {selectedOtherWordTarget === player.id && (
+                              <div className="text-xs text-muted-foreground mt-1">
+                                כבר בחרת למילה דומה
+                              </div>
+                            )}
+                          </motion.button>
+                        ))}
+                      </div>
+                      <Button
+                        onClick={() => handleVote('imposter')}
+                        disabled={!selectedImposterTarget || selectedOtherWordTarget === selectedImposterTarget}
+                        className="w-full"
+                        size="lg"
                       >
-                        <PlayerAvatar name={player.name} size="md" isEliminated={player.isEliminated} />
-                        <div className="font-semibold">{player.name}</div>
-                        {selectedOtherWordTarget === player.id && (
-                          <div className="text-xs text-muted-foreground mt-1">
-                            כבר בחרת למילה דומה
-                          </div>
-                        )}
-                      </motion.button>
-                    ))}
-                  </div>
-                  <Button
-                    onClick={() => handleVote('imposter')}
-                    disabled={!selectedImposterTarget || selectedOtherWordTarget === selectedImposterTarget}
-                    className="w-full"
-                    size="lg"
-                  >
-                    הצבע למתחזה
-                  </Button>
-                </div>
-              )}
+                        הצבע למתחזה
+                      </Button>
+                    </div>
+                  )}
 
-              {/* Other Word Vote */}
-              {!hasVotedOtherWord && (
-                <div className="space-y-4 p-4 border-2 border-blue-200 rounded-lg">
-                  <h3 className="text-lg font-semibold text-center text-blue-600">
-                    בחר שחקן למילה דומה:
-                  </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    {playersToShow.map((player) => (
-                      <motion.button
-                        key={player.id}
-                        onClick={() => setSelectedOtherWordTarget(player.id)}
-                        className={`p-4 border-2 rounded-xl transition-all flex flex-col items-center gap-2 ${
-                          selectedOtherWordTarget === player.id
-                            ? 'border-blue-500 bg-gradient-to-br from-blue-100 to-cyan-100 dark:from-blue-900/30 dark:to-cyan-900/30 scale-105 shadow-lg'
-                            : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600'
-                        }`}
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        disabled={selectedImposterTarget === player.id}
+                  {/* Other Word Vote */}
+                  {!hasVotedOtherWord && (
+                    <div className="space-y-4 p-4 border-2 border-blue-200 rounded-lg">
+                      <h3 className="text-lg font-semibold text-center text-blue-600">
+                        בחר שחקן למילה דומה:
+                      </h3>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {playersToShow.map((player) => (
+                          <motion.button
+                            key={player.id}
+                            onClick={() => setSelectedOtherWordTarget(player.id)}
+                            className={`p-4 border-2 rounded-xl transition-all flex flex-col items-center gap-2 ${
+                              selectedOtherWordTarget === player.id
+                                ? 'border-blue-500 bg-gradient-to-br from-blue-100 to-cyan-100 dark:from-blue-900/30 dark:to-cyan-900/30 scale-105 shadow-lg'
+                                : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600'
+                            }`}
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            disabled={selectedImposterTarget === player.id}
+                          >
+                            <PlayerAvatar name={player.name} size="md" isEliminated={player.isEliminated} />
+                            <div className="font-semibold">{player.name}</div>
+                            {selectedImposterTarget === player.id && (
+                              <div className="text-xs text-muted-foreground mt-1">
+                                כבר בחרת למתחזה
+                              </div>
+                            )}
+                          </motion.button>
+                        ))}
+                      </div>
+                      <Button
+                        onClick={() => handleVote('other-word')}
+                        disabled={!selectedOtherWordTarget || selectedImposterTarget === selectedOtherWordTarget}
+                        className="w-full"
+                        size="lg"
                       >
-                        <PlayerAvatar name={player.name} size="md" isEliminated={player.isEliminated} />
-                        <div className="font-semibold">{player.name}</div>
-                        {selectedImposterTarget === player.id && (
-                          <div className="text-xs text-muted-foreground mt-1">
-                            כבר בחרת למתחזה
-                          </div>
-                        )}
-                      </motion.button>
-                    ))}
-                  </div>
-                  <Button
-                    onClick={() => handleVote('other-word')}
-                    disabled={!selectedOtherWordTarget || selectedImposterTarget === selectedOtherWordTarget}
-                    className="w-full"
-                    size="lg"
-                  >
-                    הצבע למילה דומה
-                  </Button>
+                        הצבע למילה דומה
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center p-6 text-muted-foreground">
+                  <p>אין שחקנים אחרים להצביע עבורם</p>
                 </div>
               )}
-            </div>
+            </>
           )}
 
           {/* Voting Section - Normal Mode */}
-          {!isBothMode && canVote && playersToShow.length > 0 && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-center mb-4">
-                בחר שחקן להדחה:
-              </h3>
+          {!isBothMode && canVote && (
+            <>
+              {playersToShow.length > 0 ? (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-center mb-4">
+                    בחר שחקן להדחה:
+                  </h3>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                     {playersToShow.map((player) => (
                       <motion.button
@@ -1058,15 +1068,21 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                     ))}
                   </div>
               
-              <Button
-                onClick={() => handleVote()}
-                disabled={!selectedTarget}
-                className="w-full mt-4"
-                size="lg"
-              >
-                הצבע
-              </Button>
-            </div>
+                  <Button
+                    onClick={() => handleVote()}
+                    disabled={!selectedTarget}
+                    className="w-full mt-4"
+                    size="lg"
+                  >
+                    הצבע
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-center p-6 text-muted-foreground">
+                  <p>אין שחקנים אחרים להצביע עבורם</p>
+                </div>
+              )}
+            </>
           )}
 
           {/* Real-time Vote Counts (only for local mode or if admin) */}
