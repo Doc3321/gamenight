@@ -32,10 +32,8 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
     setLocalRoom(room);
   }, [room]);
   
-  // Poll for room updates
+  // Poll for room updates (continue polling even when game starts to detect game state changes)
   useEffect(() => {
-    if (localRoom.gameState !== 'waiting') return; // Stop polling if game started
-    
     const fetchRoomUpdates = async () => {
       try {
         const response = await fetch(`/api/rooms?roomId=${localRoom.id}`);
@@ -66,7 +64,9 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
       }
     };
     
-    const interval = setInterval(fetchRoomUpdates, 2000); // Poll every 2 seconds
+    // Poll every 2 seconds while in lobby, or every 5 seconds if game started (to detect state changes)
+    const pollInterval = localRoom.gameState === 'waiting' ? 2000 : 5000;
+    const interval = setInterval(fetchRoomUpdates, pollInterval);
     return () => clearInterval(interval);
   }, [localRoom.id, localRoom.gameState, onRoomUpdate, currentPlayerId, onLeaveRoom]);
   
