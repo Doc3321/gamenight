@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Event, EventType, MostViewsEventConfig, Prize } from '@/types/campaigner';
+import { Event, EventType, MostViewsEventConfig } from '@/types/campaigner';
 import { validateEventConfig } from '@/lib/eventValidation';
 
 interface CampaignerDashboardProps {
@@ -108,62 +108,6 @@ export default function CampaignerDashboard({ campaignerId }: CampaignerDashboar
     }));
   };
 
-  const addPrize = () => {
-    const currentPrizes = (newEvent.config as MostViewsEventConfig)?.prizes || [];
-    const nextPosition = currentPrizes.length + 1;
-    const newPrize: Prize = {
-      position: nextPosition,
-      name: `${nextPosition}${getOrdinalSuffix(nextPosition)} Place`,
-      description: ''
-    };
-    
-    setNewEvent(prev => ({
-      ...prev,
-      config: {
-        ...prev.config,
-        prizes: [...currentPrizes, newPrize]
-      }
-    }));
-  };
-
-  const removePrize = (position: number) => {
-    const currentPrizes = (newEvent.config as MostViewsEventConfig)?.prizes || [];
-    const updatedPrizes = currentPrizes.filter(prize => prize.position !== position);
-    
-    setNewEvent(prev => ({
-      ...prev,
-      config: {
-        ...prev.config,
-        prizes: updatedPrizes
-      }
-    }));
-  };
-
-  const updatePrize = (position: number, field: string, value: string | number | undefined) => {
-    const currentPrizes = (newEvent.config as MostViewsEventConfig)?.prizes || [];
-    const updatedPrizes = currentPrizes.map(prize => 
-      prize.position === position 
-        ? { ...prize, [field]: value }
-        : prize
-    );
-    
-    setNewEvent(prev => ({
-      ...prev,
-      config: {
-        ...prev.config,
-        prizes: updatedPrizes
-      }
-    }));
-  };
-
-  const getOrdinalSuffix = (num: number): string => {
-    const j = num % 10;
-    const k = num % 100;
-    if (j === 1 && k !== 11) return 'st';
-    if (j === 2 && k !== 12) return 'nd';
-    if (j === 3 && k !== 13) return 'rd';
-    return 'th';
-  };
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
@@ -263,59 +207,9 @@ export default function CampaignerDashboard({ campaignerId }: CampaignerDashboar
                     : "Winners will be determined by the single clip with the most views that meets the requirements."
                   }
                 </p>
-
-                {/* Prize Configuration */}
-                <div className="mt-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <h4 className="font-semibold">Prizes</h4>
-                    <Button size="sm" onClick={addPrize}>
-                      Add Prize
-                    </Button>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    {(newEvent.config as MostViewsEventConfig)?.prizes?.map((prize) => (
-                      <div key={prize.position} className="flex gap-2 items-center p-2 border rounded">
-                        <div className="flex-1">
-                          <Label htmlFor={`prize-name-${prize.position}`}>Prize Name</Label>
-                          <Input
-                            id={`prize-name-${prize.position}`}
-                            value={prize.name}
-                            onChange={(e) => updatePrize(prize.position, 'name', e.target.value)}
-                            placeholder="e.g., 1st Place"
-                          />
-                        </div>
-                        <div className="flex-1">
-                          <Label htmlFor={`prize-desc-${prize.position}`}>Description</Label>
-                          <Input
-                            id={`prize-desc-${prize.position}`}
-                            value={prize.description || ''}
-                            onChange={(e) => updatePrize(prize.position, 'description', e.target.value)}
-                            placeholder="e.g., $100 prize"
-                          />
-                        </div>
-                        <div className="w-20">
-                          <Label htmlFor={`prize-value-${prize.position}`}>Value</Label>
-                          <Input
-                            id={`prize-value-${prize.position}`}
-                            type="number"
-                            value={prize.value || ''}
-                            onChange={(e) => updatePrize(prize.position, 'value', e.target.value ? parseInt(e.target.value) : undefined)}
-                            placeholder="100"
-                          />
-                        </div>
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          onClick={() => removePrize(prize.position)}
-                          className="mt-6"
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <p className="text-sm text-gray-500 mt-2">
+                  Prizes: 1st, 2nd, and 3rd place (automatically assigned)
+                </p>
               </div>
             )}
 
@@ -352,17 +246,7 @@ export default function CampaignerDashboard({ campaignerId }: CampaignerDashboar
                     <div className="mt-2 text-sm">
                       <p>Min Views: {(event.config as MostViewsEventConfig).viewRequirement.minViews}</p>
                       <p>Sum Views: {(event.config as MostViewsEventConfig).sumViews ? 'Yes' : 'No'}</p>
-                      <div className="mt-2">
-                        <p className="font-medium">Prizes:</p>
-                        <ul className="ml-2">
-                          {(event.config as MostViewsEventConfig).prizes?.map(prize => (
-                            <li key={prize.position} className="text-xs">
-                              {prize.name}: {prize.description || 'No description'}
-                              {prize.value && ` ($${prize.value})`}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+                      <p className="text-gray-500 mt-2">Prizes: 1st, 2nd, 3rd place</p>
                     </div>
                   )}
                 </CardContent>

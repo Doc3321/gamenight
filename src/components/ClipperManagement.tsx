@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Clipper, Clip, Event, Prize, MostViewsEventConfig } from '@/types/campaigner';
+import { Clipper, Clip, Event, MostViewsEventConfig } from '@/types/campaigner';
 import { calculateClipperScore, rankClippers } from '@/lib/eventValidation';
 
 interface ClipperManagementProps {
@@ -100,9 +100,6 @@ export default function ClipperManagement({ events }: ClipperManagementProps) {
 
   const selectedEventResults = selectedEvent ? getEventResults(selectedEvent) : [];
   const selectedEventData = selectedEvent ? events.find(e => e.id === selectedEvent) : null;
-  const selectedEventPrizes = selectedEventData && selectedEventData.type === 'most-views' 
-    ? (selectedEventData.config as MostViewsEventConfig).prizes || []
-    : [];
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
@@ -226,22 +223,10 @@ export default function ClipperManagement({ events }: ClipperManagementProps) {
 
           {selectedEvent && (
             <div className="space-y-4">
-              {selectedEventPrizes.length > 0 && (
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold mb-2">🏆 Available Prizes</h3>
-                  <div className="grid grid-cols-1 gap-2">
-                    {selectedEventPrizes.map((prize: Prize) => (
-                      <div key={prize.position} className="flex justify-between items-center text-sm">
-                        <span className="font-medium">{prize.name}</span>
-                        <span className="text-gray-600">
-                          {prize.description || 'No description'}
-                          {prize.value && ` ($${prize.value})`}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold mb-2">🏆 Prizes</h3>
+                <p className="text-sm text-gray-600">1st, 2nd, and 3rd place</p>
+              </div>
               
               <h3 className="text-lg font-semibold">Leaderboard</h3>
               {selectedEventResults.length === 0 ? (
@@ -249,8 +234,8 @@ export default function ClipperManagement({ events }: ClipperManagementProps) {
               ) : (
                 <div className="space-y-2">
                   {selectedEventResults.map((result) => {
-                    const prize = selectedEventPrizes.find((p: Prize) => p.position === result.rank);
-                    const isPrizeWinner = prize !== undefined;
+                    const isPrizeWinner = result.rank <= 3;
+                    const prizeText = result.rank === 1 ? '1st Place' : result.rank === 2 ? '2nd Place' : result.rank === 3 ? '3rd Place' : '';
                     
                     return (
                       <Card 
@@ -274,7 +259,7 @@ export default function ClipperManagement({ events }: ClipperManagementProps) {
                                 {result.clipper.name}
                                 {isPrizeWinner && (
                                   <span className="px-2 py-1 bg-yellow-200 text-yellow-800 rounded text-xs font-medium">
-                                    🏆 {prize.name}
+                                    🏆 {prizeText}
                                   </span>
                                 )}
                                 {!result.isValid && <span className="text-red-500 ml-2">(No eligible clips)</span>}
@@ -285,12 +270,6 @@ export default function ClipperManagement({ events }: ClipperManagementProps) {
                               <p className="text-sm text-gray-600">
                                 Eligible Clips: {result.eligibleClips.length}
                               </p>
-                              {isPrizeWinner && (
-                                <p className="text-sm font-medium text-yellow-700">
-                                  Prize: {prize.description || prize.name}
-                                  {prize.value && ` ($${prize.value})`}
-                                </p>
-                              )}
                               {result.eligibleClips.length > 0 && (
                                 <div className="mt-2">
                                   <p className="text-xs text-gray-500">Eligible clips:</p>
