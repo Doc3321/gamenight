@@ -34,7 +34,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Missing roomId' }, { status: 400 });
     }
 
-    const room = roomManager.getRoom(roomId);
+    // Normalize room ID to uppercase for consistent lookup
+    const normalizedRoomId = roomId.toUpperCase().trim();
+    const room = roomManager.getRoom(normalizedRoomId);
     
     if (!room) {
       return NextResponse.json({ error: 'Room not found' }, { status: 404 });

@@ -9,7 +9,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const room = roomManager.getRoom(roomId);
+    // Normalize room ID to uppercase for consistent lookup
+    const normalizedRoomId = roomId.toUpperCase().trim();
+    const room = roomManager.getRoom(normalizedRoomId);
     if (!room) {
       return NextResponse.json({ error: 'Room not found' }, { status: 404 });
     }

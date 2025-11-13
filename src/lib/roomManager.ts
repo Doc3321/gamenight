@@ -76,7 +76,9 @@ export class RoomManager {
   }
 
   joinRoom(roomId: string, playerId: string, playerName: string, maxPlayers: number = 8): GameRoom | null {
-    const room = this.rooms.get(roomId);
+    // Normalize room ID to uppercase for consistent lookup
+    const normalizedRoomId = roomId.toUpperCase().trim();
+    const room = this.rooms.get(normalizedRoomId);
     if (!room || room.gameState !== 'waiting') {
       return null;
     }
@@ -104,7 +106,7 @@ export class RoomManager {
       isReady: false
     });
 
-    this.playerRooms.set(playerId, roomId);
+    this.playerRooms.set(playerId, normalizedRoomId);
     return room;
   }
 
@@ -155,7 +157,9 @@ export class RoomManager {
   }
 
   getRoom(roomId: string): GameRoom | null {
-    return this.rooms.get(roomId) || null;
+    // Normalize room ID to uppercase for consistent lookup
+    const normalizedRoomId = roomId.toUpperCase().trim();
+    return this.rooms.get(normalizedRoomId) || null;
   }
 
   getPlayerRoom(playerId: string): GameRoom | null {
@@ -169,7 +173,9 @@ export class RoomManager {
   }
 
   startGame(roomId: string, topic: string, gameMode: GameMode): GameRoom | null {
-    const room = this.rooms.get(roomId);
+    // Normalize room ID to uppercase for consistent lookup
+    const normalizedRoomId = roomId.toUpperCase().trim();
+    const room = this.rooms.get(normalizedRoomId);
     if (!room || room.players.length < 2) return null;
     
     // Check if all players are ready

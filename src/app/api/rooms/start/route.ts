@@ -9,7 +9,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing roomId, topic, or gameMode' }, { status: 400 });
     }
 
-    const room = roomManager.startGame(roomId, topic, gameMode);
+    // Normalize room ID to uppercase for consistent lookup
+    const normalizedRoomId = roomId.toUpperCase().trim();
+    const room = roomManager.startGame(normalizedRoomId, topic, gameMode);
     
     if (!room) {
       return NextResponse.json({ error: 'Failed to start game' }, { status: 400 });
