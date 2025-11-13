@@ -332,24 +332,26 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                   );
                 }
                 
+                // Default placeholder
                 return (
-                <motion.div 
-                  key="placeholder"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="text-center text-muted-foreground py-8"
-                >
-                  {isSpinning ? (
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                      className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"
-                    />
-                  ) : null}
-                  {isSpinning ? 'סובב...' : 'לחץ על "סובב" כדי לקבל את המילה שלך'}
-                </motion.div>
-              )}
+                  <motion.div 
+                    key="placeholder"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="text-center text-muted-foreground py-8"
+                  >
+                    {isSpinning ? (
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                        className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"
+                      />
+                    ) : null}
+                    {isSpinning ? 'סובב...' : 'לחץ על "סובב" כדי לקבל את המילה שלך'}
+                  </motion.div>
+                );
+              })()}
             </AnimatePresence>
           </CardContent>
         </Card>
