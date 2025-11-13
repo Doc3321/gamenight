@@ -277,7 +277,6 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     const newState = game.getState();
     setGameState(newState);
     setShowTieResults(false);
-    setIsTieBreak(false);
     setTiedPlayers([]);
     setSelectedTarget(null);
     setSelectedImposterTarget(null);
@@ -524,7 +523,6 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                 setEliminatedPlayer(null);
                 setShowResults(false);
                 setShowWrongElimination(false);
-                const currentState = game.getState();
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (game as any).state.eliminatedPlayer = undefined;
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
