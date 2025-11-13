@@ -21,6 +21,13 @@ export async function POST(request: NextRequest) {
     // First check if room exists
     const existingRoom = roomManager.getRoom(normalizedRoomId);
     if (!existingRoom) {
+      // Get all open rooms for debugging
+      const openRooms = roomManager.getOpenRooms();
+      console.error('Room not found:', { 
+        requestedRoomId: normalizedRoomId, 
+        openRoomIds: openRooms.map(r => r.id),
+        originalRoomId: roomId
+      });
       return NextResponse.json({ error: 'החדר לא נמצא. בדוק את מספר החדר.' }, { status: 404 });
     }
     

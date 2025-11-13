@@ -35,7 +35,12 @@ export default function JoinRoom({ onJoinRoom, onCreateRoom }: JoinRoomProps) {
         const response = await fetch('/api/rooms?list=true');
         const data = await response.json();
         if (data.rooms) {
-          setOpenRooms(data.rooms);
+          // Ensure room IDs are normalized to uppercase
+          const normalizedRooms = data.rooms.map((room: OpenRoom) => ({
+            ...room,
+            id: room.id.toUpperCase().trim()
+          }));
+          setOpenRooms(normalizedRooms);
         }
       } catch (error) {
         console.error('Error fetching rooms:', error);
@@ -108,14 +113,7 @@ export default function JoinRoom({ onJoinRoom, onCreateRoom }: JoinRoomProps) {
                   key={room.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="flex justify-between items-center p-4 border-2 border-purple-300 dark:border-purple-700 rounded-xl hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50 dark:hover:from-purple-900/20 dark:hover:to-pink-900/20 cursor-pointer transition-all"
-                  onClick={() => {
-                    if (playerName.trim()) {
-                      handleJoinRoom(room.id);
-                    } else {
-                      toast.error('נא להזין את שמך תחילה');
-                    }
-                  }}
+                  className="flex justify-between items-center p-4 border-2 border-purple-300 dark:border-purple-700 rounded-xl hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50 dark:hover:from-purple-900/20 dark:hover:to-pink-900/20 transition-all"
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-white font-bold font-mono text-lg">
@@ -132,6 +130,14 @@ export default function JoinRoom({ onJoinRoom, onCreateRoom }: JoinRoomProps) {
                     size="sm" 
                     className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
                     disabled={!playerName.trim()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (playerName.trim()) {
+                        handleJoinRoom(room.id);
+                      } else {
+                        toast.error('נא להזין את שמך תחילה');
+                      }
+                    }}
                   >
                     הצטרף
                   </Button>
