@@ -34,6 +34,23 @@ export default function Home() {
     setIsReconnecting(false);
   }, []);
 
+  // Detect when game starts for non-admin players
+  useEffect(() => {
+    if (appMode === 'online' && room && !game && room.gameState === 'playing' && room.currentTopic && room.gameMode) {
+      // Game was started by admin, initialize for this player
+      const topicData = wordTopics.find(t => t.id === room.currentTopic);
+      if (topicData) {
+        setSelectedTopic(room.currentTopic);
+        const gamePlayers: GamePlayer[] = room.players.map((p, index: number) => ({
+          id: index + 1,
+          name: p.name
+        }));
+        startNewGame(room.gameMode, gamePlayers, true); // isOnline = true
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appMode, room?.gameState, room?.currentTopic, room?.gameMode, room?.players, game]);
+
   const startNewGame = (gameMode: GameModeType = 'similar-word', players: GamePlayer[] = [], isOnline: boolean = false) => {
     const topic = wordTopics.find(t => t.id === selectedTopic);
     if (topic) {
@@ -238,23 +255,6 @@ export default function Home() {
       </div>
     );
   }
-
-  // Detect when game starts for non-admin players
-  useEffect(() => {
-    if (appMode === 'online' && room && !game && room.gameState === 'playing' && room.currentTopic && room.gameMode) {
-      // Game was started by admin, initialize for this player
-      const topicData = wordTopics.find(t => t.id === room.currentTopic);
-      if (topicData) {
-        setSelectedTopic(room.currentTopic);
-        const gamePlayers: GamePlayer[] = room.players.map((p, index: number) => ({
-          id: index + 1,
-          name: p.name
-        }));
-        startNewGame(room.gameMode, gamePlayers, true); // isOnline = true
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appMode, room?.gameState, room?.currentTopic, room?.gameMode, room?.players, game]);
 
   // Online mode - show room lobby
   if (appMode === 'online' && room && !game) {
