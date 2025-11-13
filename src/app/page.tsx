@@ -252,9 +252,9 @@ export default function Home() {
                 </Button>
                 <Button
                   onClick={() => setAppMode('online')}
-                  variant={appMode === 'online' ? 'default' : 'outline'}
+                  variant={(appMode as AppMode) === 'online' ? 'default' : 'outline'}
                   className={`flex-1 transition-all ${
-                    appMode === 'online' 
+                    (appMode as AppMode) === 'online' 
                       ? 'bg-gradient-to-r from-pink-600 to-orange-500 hover:from-pink-700 hover:to-orange-600 shadow-lg' 
                       : 'border-2 hover:border-pink-400'
                   }`}
