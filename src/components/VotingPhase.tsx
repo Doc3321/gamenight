@@ -36,7 +36,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   const [activeEmotes, setActiveEmotes] = useState<Array<{ id: number; emote: EmoteType; playerName: string }>>([]);
   const [showConfetti, setShowConfetti] = useState(false);
 
-  const handleVote = (voteType?: 'imposter' | 'other-word') => {
+  const handleVote = async (voteType?: 'imposter' | 'other-word') => {
     const target = voteType 
       ? (voteType === 'imposter' ? selectedImposterTarget : selectedOtherWordTarget)
       : selectedTarget;
@@ -47,6 +47,50 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     if (success) {
       const newState = game.getState();
       setGameState(newState);
+      
+      // Sync vote to server for online games
+      if (roomId && gameState.isOnline) {
+        try {
+          // Get current votes from all players
+          const votes: Record<string, { voterId: number; targetId: number; voteType?: 'imposter' | 'other-word' }> = {};
+          newState.players.forEach(player => {
+            if (player.hasVoted || player.votedForImposter !== undefined || player.votedForOtherWord !== undefined) {
+              if (newState.gameMode === 'mixed') {
+                if (player.votedForImposter !== undefined) {
+                  votes[`${player.id}_imposter`] = { voterId: player.id, targetId: player.votedForImposter, voteType: 'imposter' };
+                }
+                if (player.votedForOtherWord !== undefined) {
+                  votes[`${player.id}_other`] = { voterId: player.id, targetId: player.votedForOtherWord, voteType: 'other-word' };
+                }
+              } else if (player.votedFor !== undefined) {
+                votes[player.id.toString()] = { voterId: player.id, targetId: player.votedFor };
+              }
+            }
+          });
+          
+          await fetch('/api/rooms/game-state', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              roomId,
+              gameStateData: {
+                currentPlayerIndex: newState.currentPlayerIndex,
+                votingPhase: newState.votingPhase,
+                votingActivated: newState.votingActivated,
+                votes,
+                playerWords: newState.players.reduce((acc, p) => {
+                  if (p.currentWord) {
+                    acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
+                  }
+                  return acc;
+                }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
+              }
+            })
+          });
+        } catch (error) {
+          console.error('Error syncing vote:', error);
+        }
+      }
       
       // Check if voting is complete for this player (both votes in mixed mode)
       const currentPlayer = newState.players.find(p => p.id === currentPlayerId);
@@ -146,9 +190,36 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     setSelectedOtherWordTarget(null);
   };
 
-  const handleActivateVoting = () => {
+  const handleActivateVoting = async () => {
     game.activateVoting();
-    setGameState(game.getState());
+    const newState = game.getState();
+    setGameState(newState);
+    
+    // Sync voting activation to server for online games
+    if (roomId && gameState.isOnline) {
+      try {
+        await fetch('/api/rooms/game-state', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            roomId,
+            gameStateData: {
+              currentPlayerIndex: newState.currentPlayerIndex,
+              votingPhase: newState.votingPhase,
+              votingActivated: newState.votingActivated,
+              playerWords: newState.players.reduce((acc, p) => {
+                if (p.currentWord) {
+                  acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
+                }
+                return acc;
+              }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
+            }
+          })
+        });
+      } catch (error) {
+        console.error('Error syncing voting activation:', error);
+      }
+    }
   };
 
   // Real-time sync for online games
@@ -161,6 +232,61 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
         if (response.ok) {
           const data = await response.json();
           if (data.room?.gameStateData) {
+            const serverState = data.room.gameStateData;
+            let stateChanged = false;
+            
+            // Sync voting activation
+            if (serverState.votingActivated !== undefined && serverState.votingActivated !== gameState.votingActivated) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (game as any).state.votingActivated = serverState.votingActivated;
+              if (serverState.votingActivated && !gameState.votingPhase) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (game as any).state.votingPhase = true;
+              }
+              stateChanged = true;
+            }
+            
+            // Sync votes from server
+            if (serverState.votes) {
+              const currentState = game.getState();
+              // Reset all vote counts first
+              currentState.players.forEach(p => {
+                p.votes = 0;
+              });
+              
+              Object.entries(serverState.votes).forEach(([voteKey, voteData]) => {
+                type VoteData = { voterId: number; targetId: number; voteType?: 'imposter' | 'other-word' };
+                const vote = voteData as VoteData;
+                const voter = currentState.players.find(p => p.id === vote.voterId);
+                if (voter) {
+                  // Apply vote from server
+                  if (currentState.gameMode === 'mixed' && vote.voteType) {
+                    if (vote.voteType === 'imposter' && voter.votedForImposter === undefined) {
+                      voter.votedForImposter = vote.targetId;
+                    } else if (vote.voteType === 'other-word' && voter.votedForOtherWord === undefined) {
+                      voter.votedForOtherWord = vote.targetId;
+                    }
+                    // Mark as voted if both votes are cast
+                    if (voter.votedForImposter !== undefined && voter.votedForOtherWord !== undefined) {
+                      voter.hasVoted = true;
+                    }
+                  } else if (!vote.voteType && voter.votedFor === undefined) {
+                    voter.votedFor = vote.targetId;
+                    voter.hasVoted = true;
+                  }
+                  
+                  // Update target player's vote count
+                  const target = currentState.players.find(p => p.id === vote.targetId);
+                  if (target) {
+                    if (target.votes === undefined) target.votes = 0;
+                    target.votes++;
+                  }
+                  
+                  stateChanged = true;
+                }
+              });
+            }
+            
             // Sync emotes
             if (data.room.gameStateData.emotes) {
               const recentEmotes = data.room.gameStateData.emotes
@@ -175,6 +301,14 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                 });
               setActiveEmotes(recentEmotes);
             }
+            
+            if (stateChanged) {
+              const updatedState = game.getState();
+              setGameState({ 
+                ...updatedState,
+                players: updatedState.players.map(p => ({ ...p }))
+              });
+            }
           }
         }
       } catch (error) {
@@ -182,9 +316,9 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       }
     };
     
-    const interval = setInterval(syncGameState, 1000); // Poll every second
+    const interval = setInterval(syncGameState, 500); // Poll every 500ms for faster updates
     return () => clearInterval(interval);
-  }, [roomId, gameState.isOnline, gameState.players]);
+  }, [roomId, gameState.isOnline, gameState.players, gameState.votingActivated, gameState.votingPhase, game]);
 
   useEffect(() => {
     const interval = setInterval(() => {
