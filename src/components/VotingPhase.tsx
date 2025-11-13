@@ -106,6 +106,17 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
         }, 300);
       }
       
+      // Check if all players have voted (for online mode, check after sync)
+      if (newState.isOnline && isComplete) {
+        // Wait a bit for server sync, then check if all voted
+        setTimeout(() => {
+          const updatedState = game.getState();
+          if (game.allPlayersVoted() && !showResults && !showTieResults && !showWrongElimination) {
+            handleCalculateResults();
+          }
+        }, 600);
+      }
+      
       if (voteType === 'imposter') {
         setSelectedImposterTarget(null);
       } else if (voteType === 'other-word') {
@@ -584,18 +595,79 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   }, [roomId, gameState.isOnline, gameState.players, gameState.votingActivated, gameState.votingPhase, game, showTieResults]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      const newState = game.getState();
-      setGameState(newState);
-      
-      // Check if all players have voted
-      if (game.allPlayersVoted() && !showResults && !showTieResults && !showWrongElimination) {
-        handleCalculateResults();
-      }
-    }, 500); // Check every 500ms for updates
+    if (!gameState.isOnline) {
+      // For local mode, check local state
+      const interval = setInterval(() => {
+        const newState = game.getState();
+        setGameState(newState);
+        
+        // Check if all players have voted
+        if (game.allPlayersVoted() && !showResults && !showTieResults && !showWrongElimination) {
+          handleCalculateResults();
+        }
+      }, 500); // Check every 500ms for updates
 
-    return () => clearInterval(interval);
-  }, [game, showResults, tiedPlayers, handleCalculateResults, showTieResults, showWrongElimination]);
+      return () => clearInterval(interval);
+    } else {
+      // For online mode, check server state via polling
+      const interval = setInterval(async () => {
+        if (!roomId) return;
+        
+        try {
+          const response = await fetch(`/api/rooms/game-state?roomId=${roomId}`);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.room?.gameStateData?.votes) {
+              const serverVotes = data.room.gameStateData.votes;
+              const currentState = game.getState();
+              const activePlayers = currentState.players.filter(p => !p.isEliminated);
+              const isBothMode = currentState.gameMode === 'mixed';
+              
+              // Check if all players have voted based on server votes
+              let allVoted = true;
+              for (const player of activePlayers) {
+                if (isBothMode) {
+                  // Check if both votes exist in server votes
+                  const hasImposterVote = Object.values(serverVotes).some((v: { voterId: number; voteType?: string }) => 
+                    v.voterId === player.id && v.voteType === 'imposter'
+                  );
+                  const hasOtherVote = Object.values(serverVotes).some((v: { voterId: number; voteType?: string }) => 
+                    v.voterId === player.id && v.voteType === 'other-word'
+                  );
+                  if (!hasImposterVote || !hasOtherVote) {
+                    allVoted = false;
+                    break;
+                  }
+                } else {
+                  // Check if vote exists in server votes
+                  const hasVote = Object.values(serverVotes).some((v: { voterId: number; voteType?: string }) => 
+                    v.voterId === player.id && !v.voteType
+                  );
+                  if (!hasVote) {
+                    allVoted = false;
+                    break;
+                  }
+                }
+              }
+              
+              // If all voted and results not shown, calculate results
+              if (allVoted && !showResults && !showTieResults && !showWrongElimination) {
+                // Make sure local state is synced before calculating
+                const newState = game.getState();
+                if (game.allPlayersVoted()) {
+                  handleCalculateResults();
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error checking voting completion:', error);
+        }
+      }, 500); // Check every 500ms for updates
+
+      return () => clearInterval(interval);
+    }
+  }, [game, showResults, tiedPlayers, handleCalculateResults, showTieResults, showWrongElimination, gameState.isOnline, roomId]);
 
   const handleContinueAfterElimination = async () => {
     // Use the game's continueAfterWrongElimination method to properly reset state
