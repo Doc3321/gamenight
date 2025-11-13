@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { User, Shield } from 'lucide-react';
+import { Shield } from 'lucide-react';
 
 interface AgentBadgeProps {
   agentName: string;

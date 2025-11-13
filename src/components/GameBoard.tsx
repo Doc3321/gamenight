@@ -178,7 +178,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
       } else {
         // All players have voted, calculate results
         if (!gameState.eliminatedPlayer) {
-          const result = game.calculateVotingResult();
+          game.calculateVotingResult();
           const updatedState = game.getState();
           setGameState(updatedState);
         }
@@ -402,7 +402,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                       </div>
                     ) : (
                       <div className="text-muted-foreground">
-                        <p className="text-lg mb-2">לחץ על "סובב" כדי לקבל את המילה שלך</p>
+                        <p className="text-lg mb-2">לחץ על &quot;סובב&quot; כדי לקבל את המילה שלך</p>
                         <p className="text-xs font-mono uppercase tracking-wider opacity-70">CLASSIFIED INFORMATION</p>
                       </div>
                     )}

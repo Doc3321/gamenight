@@ -24,9 +24,7 @@ interface OpenRoom {
 }
 
 export default function JoinRoom({ onJoinRoom, onCreateRoom }: JoinRoomProps) {
-  const [roomId, setRoomId] = useState('');
   const [playerName, setPlayerName] = useState('');
-  const [isJoining, setIsJoining] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [openRooms, setOpenRooms] = useState<OpenRoom[]>([]);
 
@@ -51,20 +49,17 @@ export default function JoinRoom({ onJoinRoom, onCreateRoom }: JoinRoomProps) {
   }, []);
 
   const handleJoinRoom = async (roomIdToJoin?: string) => {
-    const targetRoomId = roomIdToJoin || roomId.trim();
+    const targetRoomId = roomIdToJoin || '';
     if (!targetRoomId || !playerName.trim()) {
       toast.error('נא למלא את כל השדות');
       return;
     }
 
-    setIsJoining(true);
     try {
       await onJoinRoom(targetRoomId.toUpperCase().trim(), playerName.trim());
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'שגיאה בהצטרפות לחדר';
       toast.error(errorMessage);
-    } finally {
-      setIsJoining(false);
     }
   };
 

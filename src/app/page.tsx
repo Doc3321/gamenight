@@ -14,6 +14,7 @@ import GameSetup from '@/components/GameSetup';
 import { Player as GamePlayer } from '@/lib/gameLogic';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { GameRoom, Player } from '@/lib/roomManager';
+import AgentLoadingScreen from '@/components/AgentLoadingScreen';
 
 type AppMode = 'local' | 'online';
 
