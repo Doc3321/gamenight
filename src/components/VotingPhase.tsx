@@ -451,6 +451,14 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                   (game as any).state.votingPhase = true;
                 }
                 stateChanged = true;
+                // Force immediate state update when voting is activated so players can vote
+                if (serverState.votingActivated) {
+                  const updatedState = game.getState();
+                  setGameState({ 
+                    ...updatedState,
+                    players: updatedState.players.map(p => ({ ...p }))
+                  });
+                }
               }
             }
             
@@ -803,16 +811,17 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     // The voting phase will continue automatically
   };
 
-  const currentPlayer = gameState.players.find(p => p.id === currentPlayerId);
-  const activePlayers = gameState.players.filter(p => !p.isEliminated);
+  // Get current game state directly to ensure we have the latest data
+  const currentGameStateForRender = game.getState();
+  const currentPlayer = currentGameStateForRender.players.find(p => p.id === currentPlayerId);
+  const activePlayers = currentGameStateForRender.players.filter(p => !p.isEliminated);
   const votingResults = game.getVotingResults();
   const hasVoted = currentPlayer?.hasVoted || false;
-  const isBothMode = gameState.gameMode === 'mixed';
-  const showVoteCounts = gameState.showVoteCounts; // false for online, true for local
+  const isBothMode = currentGameStateForRender.gameMode === 'mixed';
+  const showVoteCounts = currentGameStateForRender.showVoteCounts; // false for online, true for local
 
   // Admin activation screen (online mode only) - only show if not showing results
-  const currentGameStateForAdmin = game.getState();
-  const isVotingActivatedForAdmin = currentGameStateForAdmin.votingActivated === true || gameState.votingActivated === true;
+  const isVotingActivatedForAdmin = currentGameStateForRender.votingActivated === true || gameState.votingActivated === true;
   if (gameState.isOnline && !isVotingActivatedForAdmin && isAdmin && !showResults && !showWrongElimination && !showTieResults) {
     return (
       <div className="max-w-2xl mx-auto relative">
@@ -858,8 +867,8 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
 
   // Waiting for admin to activate (online mode) - check both component state and game state
   // Only show if not showing results
-  const currentGameState = game.getState();
-  const isVotingActivated = currentGameState.votingActivated === true || gameState.votingActivated === true;
+  // Use the already-fetched currentGameStateForRender to avoid multiple getState() calls
+  const isVotingActivated = currentGameStateForRender.votingActivated === true || gameState.votingActivated === true;
   if (gameState.isOnline && !isVotingActivated && !isAdmin && !showResults && !showWrongElimination && !showTieResults) {
     return (
       <div className="max-w-2xl mx-auto relative">
@@ -1032,8 +1041,8 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   const playersToShow = activePlayers.filter(p => p.id !== currentPlayerId);
   
   // Can vote if not voted yet and voting is activated (for online mode) - check both states
-  const currentGameStateForVote = game.getState();
-  const isVotingActivatedForVote = currentGameStateForVote.votingActivated === true || gameState.votingActivated === true;
+  // Use the already-fetched currentGameStateForRender to avoid multiple getState() calls
+  const isVotingActivatedForVote = currentGameStateForRender.votingActivated === true || gameState.votingActivated === true;
   const canVote = !hasVoted && (!gameState.isOnline || isVotingActivatedForVote);
 
   // Check voting progress for both mode
