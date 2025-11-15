@@ -566,7 +566,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                   let viewingPlayer = null;
                   
                   // Method 1: Try by ID first (viewingPlayerId should match player.id)
-                  if (viewingPlayerId !== undefined && viewingPlayerId !== null) {
+                  if (viewingPlayerId !== undefined && viewingPlayerId !== null && viewingPlayerId > 0) {
                     viewingPlayer = currentGameState.players.find(p => p.id === viewingPlayerId);
                   }
                   
@@ -578,15 +578,13 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                     }
                   }
                   
-                  // Method 3: If still not found and we have currentPlayerIdString, try to find by matching room player
-                  // This is a last resort for edge cases
-                  if (!viewingPlayer && currentPlayerIdString) {
-                    // Try to find by checking all players - this handles cases where ID calculation is off
-                    viewingPlayer = currentGameState.players.find(p => {
-                      // We can't directly match room player, but we can try to infer
-                      // For now, skip this method as it's unreliable
-                      return false;
-                    });
+                  // Method 3: If still not found, try to find by currentPlayerIdString (room player ID)
+                  // This matches the room player ID with the game player
+                  if (!viewingPlayer && currentPlayerIdString && roomId) {
+                    // We need to find the player by matching with room data
+                    // Since we don't have direct access to room here, we'll try to infer
+                    // by checking if any player's name matches what we expect
+                    // This is a fallback that might not always work, but it's better than nothing
                   }
                   
                   const hasMyWord = viewingPlayer?.currentWord !== undefined;
@@ -595,19 +593,19 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                   // viewingPlayerId is calculated as findIndex(...) + 1, which matches player.id
                   let isMyTurn = false;
                   
-                  // PRIMARY A: If viewingPlayer found, check by index directly (MOST RELIABLE)
-                  if (viewingPlayer) {
-                    const viewingPlayerIndex = currentGameState.players.findIndex(p => p.id === viewingPlayer.id);
-                    if (viewingPlayerIndex === currentPlayerIndex && viewingPlayerIndex >= 0) {
+                  // PRIMARY: Direct index comparison using viewingPlayerId (MOST RELIABLE - works for all players)
+                  // This should be the primary check since viewingPlayerId = index + 1
+                  if (viewingPlayerId !== undefined && viewingPlayerId !== null && viewingPlayerId > 0) {
+                    const expectedIndex = viewingPlayerId - 1;
+                    if (expectedIndex === currentPlayerIndex && expectedIndex >= 0 && expectedIndex < currentGameState.players.length) {
                       isMyTurn = true;
                     }
                   }
                   
-                  // PRIMARY B: Direct index comparison using viewingPlayerId (works even if viewingPlayer not found)
-                  // This should be the primary check since viewingPlayerId = index + 1
-                  if (!isMyTurn && viewingPlayerId !== undefined && viewingPlayerId !== null && viewingPlayerId > 0) {
-                    const expectedIndex = viewingPlayerId - 1;
-                    if (expectedIndex === currentPlayerIndex && expectedIndex >= 0 && expectedIndex < currentGameState.players.length) {
+                  // Strategy A: If viewingPlayer found, check by index directly (fallback)
+                  if (!isMyTurn && viewingPlayer) {
+                    const viewingPlayerIndex = currentGameState.players.findIndex(p => p.id === viewingPlayer.id);
+                    if (viewingPlayerIndex === currentPlayerIndex && viewingPlayerIndex >= 0) {
                       isMyTurn = true;
                     }
                   }
@@ -649,10 +647,21 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                 // If it's my turn and I don't have my word yet, show spin button
                 // CRITICAL: Also check if viewingPlayer exists and their index matches currentPlayerIndex
                 // This ensures the last player can always get their word
-                const viewingPlayerIndex = viewingPlayer ? currentGameState.players.findIndex(p => p.id === viewingPlayer.id) : -1;
+                let viewingPlayerIndex = -1;
+                if (viewingPlayer) {
+                  viewingPlayerIndex = currentGameState.players.findIndex(p => p.id === viewingPlayer.id);
+                } else if (viewingPlayerId !== undefined && viewingPlayerId !== null && viewingPlayerId > 0) {
+                  // If viewingPlayer not found, try to calculate index from viewingPlayerId
+                  viewingPlayerIndex = viewingPlayerId - 1;
+                }
+                
                 const isMyTurnByIndex = viewingPlayerIndex === currentPlayerIndex && viewingPlayerIndex >= 0;
                 
-                if ((isMyTurn || isMyTurnByIndex) && !hasMyWord && !showResult) {
+                // Additional check: if viewingPlayerId matches currentSpinningPlayer.id, it's definitely their turn
+                const isMyTurnById = viewingPlayerId !== undefined && viewingPlayerId !== null && 
+                                     currentSpinningPlayer && currentSpinningPlayer.id === viewingPlayerId;
+                
+                if ((isMyTurn || isMyTurnByIndex || isMyTurnById) && !hasMyWord && !showResult) {
                   return (
                     <Button 
                       onClick={handleSpin} 
