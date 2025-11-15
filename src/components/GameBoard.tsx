@@ -193,17 +193,21 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
             let stateChanged = false;
             
             // Update currentPlayerIndex from server - CRITICAL for turn progression
-            if (serverState.currentPlayerIndex !== undefined && serverState.currentPlayerIndex !== currentState.currentPlayerIndex) {
-              // Directly update the game's internal state
+            if (serverState.currentPlayerIndex !== undefined) {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              (game as any).state.currentPlayerIndex = serverState.currentPlayerIndex;
-              stateChanged = true;
-              // Force immediate update to ensure UI reflects the change right away
-              const updatedState = game.getState();
-              setGameState({ 
-                ...updatedState,
-                players: updatedState.players.map(p => ({ ...p }))
-              });
+              const currentIdx = (game as any).state.currentPlayerIndex;
+              if (serverState.currentPlayerIndex !== currentIdx) {
+                // Directly update the game's internal state
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (game as any).state.currentPlayerIndex = serverState.currentPlayerIndex;
+                stateChanged = true;
+                // Force immediate update to ensure UI reflects the change right away
+                const updatedState = game.getState();
+                setGameState({ 
+                  ...updatedState,
+                  players: updatedState.players.map(p => ({ ...p }))
+                });
+              }
             }
             
             // Update currentSpin from server (if provided, otherwise use currentPlayerIndex)
@@ -600,6 +604,12 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                     if (viewingPlayerIndex === currentPlayerIndex) {
                       isMyTurn = true;
                     }
+                  }
+                  
+                  // Additional fallback: If we still can't determine and viewingPlayer exists,
+                  // check if the currentSpinningPlayer's name matches viewingPlayer's name
+                  if (!isMyTurn && viewingPlayer && currentSpinningPlayer && currentSpinningPlayer.name === viewingPlayer.name) {
+                    isMyTurn = true;
                   }
                 
                 // If player already has their word, show status message
