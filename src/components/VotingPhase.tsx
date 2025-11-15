@@ -110,21 +110,58 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
         ? (currentPlayer?.votedForImposter !== undefined && currentPlayer?.votedForOtherWord !== undefined)
         : currentPlayer?.hasVoted;
       
+      // For online mode: increment currentVotingPlayerIndex after player completes voting
+      if (newState.isOnline && isComplete) {
+        const activePlayersList = newState.players.filter(p => !p.isEliminated);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const currentVotingIdx = (game as any).state.currentVotingPlayerIndex ?? 0;
+        
+        // Move to next player if not all have voted
+        if (currentVotingIdx < activePlayersList.length - 1) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (game as any).state.currentVotingPlayerIndex = currentVotingIdx + 1;
+          
+          // Sync updated currentVotingPlayerIndex to server
+          try {
+            const updatedState = game.getState();
+            await fetch('/api/rooms/game-state', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                roomId,
+                gameStateData: {
+                  currentPlayerIndex: updatedState.currentPlayerIndex,
+                  currentVotingPlayerIndex: updatedState.currentVotingPlayerIndex,
+                  votingPhase: updatedState.votingPhase,
+                  votingActivated: votingActivatedValue,
+                  votes,
+                  playerWords: updatedState.players.reduce((acc, p) => {
+                    if (p.currentWord) {
+                      acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
+                    }
+                    return acc;
+                  }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
+                }
+              })
+            });
+          } catch (error) {
+            console.error('Error syncing voting index:', error);
+          }
+        } else {
+          // All players have voted - calculate results
+          setTimeout(() => {
+            if (game.allPlayersVoted() && !showResults && !showTieResults && !showWrongElimination) {
+              handleCalculateResults();
+            }
+          }, 600);
+        }
+      }
+      
       if (isComplete && !newState.isOnline) {
         // In local mode, immediately trigger vote complete to show next player
         setTimeout(() => {
           onVoteComplete();
         }, 300);
-      }
-      
-      // Check if all players have voted (for online mode, check after sync)
-      if (newState.isOnline && isComplete) {
-        // Wait a bit for server sync, then check if all voted
-        setTimeout(() => {
-          if (game.allPlayersVoted() && !showResults && !showTieResults && !showWrongElimination) {
-            handleCalculateResults();
-          }
-        }, 600);
       }
       
       if (voteType === 'imposter') {
@@ -376,6 +413,9 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
 
   const handleActivateVoting = async () => {
     game.activateVoting();
+    // Reset currentVotingPlayerIndex to 0 for sequential voting
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (game as any).state.currentVotingPlayerIndex = 0;
     const newState = game.getState();
     
     // Clear any previous results when activating new voting round
@@ -406,6 +446,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             gameStateData: {
               currentPlayerIndex: updatedState.currentPlayerIndex,
               votingPhase: updatedState.votingPhase,
+              currentVotingPlayerIndex: 0, // Reset to first player
               votingActivated: true, // Explicitly set to true
               eliminatedPlayer: undefined, // Clear eliminated player
               wrongElimination: false,
@@ -1057,10 +1098,67 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   // Show all active players (excluding current player)
   const playersToShow = activePlayers.filter(p => p.id !== currentPlayerId);
   
-  // Can vote if not voted yet and voting is activated (for online mode) - check both states
+  // For online mode: Check if it's this player's turn to vote (sequential voting like word-getting)
+  const currentVotingIndex = currentGameStateForRender.currentVotingPlayerIndex ?? 0;
+  const activePlayersForVoting = currentGameStateForRender.players.filter(p => !p.isEliminated);
+  const isMyTurnToVote = gameState.isOnline 
+    ? (currentVotingIndex < activePlayersForVoting.length && activePlayersForVoting[currentVotingIndex]?.id === currentPlayerId)
+    : true; // Local mode: always show voting UI
+  
+  // Can vote if: not voted yet, voting is activated (for online mode), AND it's my turn (for online mode)
   // Use the already-fetched currentGameStateForRender to avoid multiple getState() calls
   const isVotingActivatedForVote = currentGameStateForRender.votingActivated === true || gameState.votingActivated === true;
-  const canVote = !hasVoted && (!gameState.isOnline || isVotingActivatedForVote);
+  const canVote = !hasVoted && (!gameState.isOnline || (isVotingActivatedForVote && isMyTurnToVote));
+  
+  // Show waiting screen if it's not my turn to vote (online mode only)
+  if (gameState.isOnline && !isMyTurnToVote && currentVotingIndex < activePlayersForVoting.length) {
+    const currentVotingPlayer = activePlayersForVoting[currentVotingIndex];
+    return (
+      <div className="max-w-2xl mx-auto relative">
+        <ClassifiedStamp level="SECRET" />
+        <AgentScanLine />
+        <Card className="relative overflow-hidden border-2 border-purple-500/30 dark:border-purple-400/50">
+          <CardHeader className="text-center">
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <CardTitle className="text-2xl font-mono tracking-wider bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 bg-clip-text text-transparent">
+                ממתין לתורך להצביע
+              </CardTitle>
+              <p className="text-xs text-muted-foreground uppercase tracking-widest mt-2">
+                WAITING FOR YOUR TURN
+              </p>
+            </motion.div>
+          </CardHeader>
+          <CardContent className="text-center space-y-6">
+            <AgentSpinner size="lg" message="ממתין לתורך..." />
+            <div className="space-y-2">
+              <p className="text-muted-foreground">
+                תור של: <span className="font-bold">{currentVotingPlayer?.name}</span>
+              </p>
+              <p className="text-sm text-muted-foreground">
+                ממתין לשחקנים אחרים להצביע...
+              </p>
+            </div>
+            {/* Show vote status for all players */}
+            <div className="flex justify-center gap-4 mt-4">
+              {activePlayersForVoting.map((player) => (
+                <div key={player.id} className="flex flex-col items-center gap-1">
+                  <PlayerAvatar 
+                    name={player.name} 
+                    size="sm" 
+                    isActive={player.id === currentVotingPlayer?.id}
+                  />
+                  <div className={`w-2 h-2 rounded-full ${player.hasVoted ? 'bg-green-500' : 'bg-orange-500'}`} />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   // Check voting progress for both mode
   const hasVotedImposter = currentPlayer?.votedForImposter !== undefined;

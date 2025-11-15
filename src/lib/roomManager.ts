@@ -29,6 +29,7 @@ export interface GameRoom {
     currentPlayerIndex: number;
     currentSpin?: number; // Add currentSpin to game state data
     votingPhase: boolean;
+    currentVotingPlayerIndex?: number; // Current player whose turn it is to vote
     votingActivated: boolean;
     eliminatedPlayer?: { id: number; name: string; wordType?: 'normal' | 'similar' | 'imposter'; votes?: number };
     isTie?: boolean;

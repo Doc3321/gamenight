@@ -113,18 +113,19 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               roomId,
-              gameStateData: {
-                currentPlayerIndex: updatedState.currentPlayerIndex,
-                currentSpin: updatedState.currentSpin,
-                votingPhase: updatedState.votingPhase,
-                votingActivated: updatedState.votingActivated,
-                playerWords: updatedState.players.reduce((acc, p) => {
-                  if (p.currentWord) {
-                    acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
-                  }
-                  return acc;
-                }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
-              }
+                gameStateData: {
+                  currentPlayerIndex: updatedState.currentPlayerIndex,
+                  currentSpin: updatedState.currentSpin,
+                  votingPhase: updatedState.votingPhase,
+                  currentVotingPlayerIndex: updatedState.currentVotingPlayerIndex,
+                  votingActivated: updatedState.votingActivated,
+                  playerWords: updatedState.players.reduce((acc, p) => {
+                    if (p.currentWord) {
+                      acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
+                    }
+                    return acc;
+                  }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
+                }
             })
           });
         } catch (error) {
@@ -149,18 +150,19 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               roomId,
-              gameStateData: {
-                currentPlayerIndex: updatedState.currentPlayerIndex,
-                currentSpin: updatedState.currentSpin,
-                votingPhase: updatedState.votingPhase,
-                votingActivated: updatedState.votingActivated,
-                playerWords: updatedState.players.reduce((acc, p) => {
-                  if (p.currentWord) {
-                    acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
-                  }
-                  return acc;
-                }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
-              }
+                gameStateData: {
+                  currentPlayerIndex: updatedState.currentPlayerIndex,
+                  currentSpin: updatedState.currentSpin,
+                  votingPhase: updatedState.votingPhase,
+                  currentVotingPlayerIndex: updatedState.currentVotingPlayerIndex,
+                  votingActivated: updatedState.votingActivated,
+                  playerWords: updatedState.players.reduce((acc, p) => {
+                    if (p.currentWord) {
+                      acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
+                    }
+                    return acc;
+                  }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
+                }
             })
           });
         } catch (error) {
@@ -237,6 +239,13 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
             if (serverState.votingPhase !== undefined && serverState.votingPhase !== currentState.votingPhase) {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               (game as any).state.votingPhase = serverState.votingPhase;
+              stateChanged = true;
+            }
+            
+            // Update currentVotingPlayerIndex from server (for sequential voting)
+            if (serverState.currentVotingPlayerIndex !== undefined && serverState.currentVotingPlayerIndex !== (currentState.currentVotingPlayerIndex ?? 0)) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (game as any).state.currentVotingPlayerIndex = serverState.currentVotingPlayerIndex;
               stateChanged = true;
             }
             
@@ -338,21 +347,58 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
   // CRITICAL: Only show voting phase if ALL players have spun AND all have words assigned
   // This ensures the last player has gotten their word before voting starts
   if (allPlayersHaveSpun && allPlayersHaveWordsAssigned) {
-    // For online mode, show voting to current viewing player
-    // For local mode, show voting to next player who hasn't voted
+    // For online mode, use sequential voting like word-getting process
+    // Only show voting UI to the current voting player
     if (gameState.isOnline && viewingPlayerId) {
-      const viewingPlayer = gameState.players.find(p => p.id === viewingPlayerId);
-      if (viewingPlayer && !viewingPlayer.isEliminated) {
-        return (
-          <VotingPhase
-            game={game}
-            currentPlayerId={viewingPlayerId}
-            onVoteComplete={handleVoteComplete}
-            isAdmin={isAdmin}
-            roomId={roomId}
-            currentPlayerIdString={currentPlayerIdString}
-          />
-        );
+      const currentGameStateForVotingCheck = game.getState();
+      const activePlayers = currentGameStateForVotingCheck.players.filter(p => !p.isEliminated);
+      const currentVotingIndex = currentGameStateForVotingCheck.currentVotingPlayerIndex ?? 0;
+      
+      // Check if there's a current voting player
+      if (currentVotingIndex < activePlayers.length) {
+        const currentVotingPlayer = activePlayers[currentVotingIndex];
+        const viewingPlayer = currentGameStateForVotingCheck.players.find(p => p.id === viewingPlayerId);
+        
+        // Only show voting UI to the current voting player
+        if (viewingPlayer && !viewingPlayer.isEliminated && currentVotingPlayer && viewingPlayer.id === currentVotingPlayer.id) {
+          return (
+            <VotingPhase
+              game={game}
+              currentPlayerId={viewingPlayerId}
+              onVoteComplete={handleVoteComplete}
+              isAdmin={isAdmin}
+              roomId={roomId}
+              currentPlayerIdString={currentPlayerIdString}
+            />
+          );
+        } else if (viewingPlayer && !viewingPlayer.isEliminated) {
+          // Show waiting screen for other players
+          return (
+            <VotingPhase
+              game={game}
+              currentPlayerId={viewingPlayerId}
+              onVoteComplete={handleVoteComplete}
+              isAdmin={isAdmin}
+              roomId={roomId}
+              currentPlayerIdString={currentPlayerIdString}
+            />
+          );
+        }
+      } else {
+        // All players have voted, show results to everyone
+        const viewingPlayer = currentGameStateForVotingCheck.players.find(p => p.id === viewingPlayerId);
+        if (viewingPlayer && !viewingPlayer.isEliminated) {
+          return (
+            <VotingPhase
+              game={game}
+              currentPlayerId={viewingPlayerId}
+              onVoteComplete={handleVoteComplete}
+              isAdmin={isAdmin}
+              roomId={roomId}
+              currentPlayerIdString={currentPlayerIdString}
+            />
+          );
+        }
       }
     } else {
       // Local mode: sequential voting - show next player who hasn't voted

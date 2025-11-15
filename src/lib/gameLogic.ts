@@ -29,6 +29,7 @@ export interface GameState {
   players: Player[];
   currentPlayerIndex: number;
   votingPhase: boolean; // Whether we're in voting phase
+  currentVotingPlayerIndex: number; // Current player whose turn it is to vote (for sequential voting)
   votingRound: number; // Current voting round (for tie-breaking)
   eliminatedPlayer?: Player; // The eliminated player
   isOnline: boolean; // Whether this is an online game
@@ -103,6 +104,7 @@ export class WordGame {
       })),
       currentPlayerIndex: 0,
       votingPhase: false,
+      currentVotingPlayerIndex: 0, // Start at 0 for sequential voting
       votingRound: 1,
       eliminatedPlayer: undefined,
       isOnline,
@@ -179,6 +181,7 @@ export class WordGame {
 
   public startVotingPhase(): void {
     this.state.votingPhase = true;
+    this.state.currentVotingPlayerIndex = 0; // Reset to first active player
     // Reset voting state for all active (non-eliminated) players
     this.state.players.forEach(p => {
       if (!p.isEliminated) {
