@@ -521,6 +521,23 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               }
             }
             
+            // Sync currentVotingPlayerIndex from server (CRITICAL for sequential voting)
+            if (serverState.currentVotingPlayerIndex !== undefined) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const currentVotingIdx = (game as any).state.currentVotingPlayerIndex ?? 0;
+              if (serverState.currentVotingPlayerIndex !== currentVotingIdx) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (game as any).state.currentVotingPlayerIndex = serverState.currentVotingPlayerIndex;
+                stateChanged = true;
+                // Force immediate state update when voting index changes
+                const updatedState = game.getState();
+                setGameState({ 
+                  ...updatedState,
+                  players: updatedState.players.map(p => ({ ...p }))
+                });
+              }
+            }
+            
             // Sync votes from server
             if (serverState.votes !== undefined) {
               const currentState = game.getState();
@@ -1078,11 +1095,11 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   }
 
   // Waiting for admin to activate (online mode) - check both component state and game state
-  // Only show if not showing results AND no eliminated player AND definitely not admin
+  // Only show if voting is NOT activated yet AND not showing results AND no eliminated player AND definitely not admin
   // Use the already-fetched currentGameStateForRender to avoid multiple getState() calls
   const isVotingActivated = currentGameStateForRender.votingActivated === true || gameState.votingActivated === true;
-  const shouldShowWaitingScreen = gameState.isOnline && !isVotingActivated && isAdmin === false && !showResults && !showWrongElimination && !showTieResults && !hasEliminatedPlayer && !hasEliminatedPlayerInState;
-  if (shouldShowWaitingScreen) {
+  const shouldShowWaitingForActivation = gameState.isOnline && !isVotingActivated && isAdmin === false && !showResults && !showWrongElimination && !showTieResults && !hasEliminatedPlayer && !hasEliminatedPlayerInState;
+  if (shouldShowWaitingForActivation) {
     return (
       <div className="max-w-2xl mx-auto relative">
         <ClassifiedStamp level="SECRET" />
