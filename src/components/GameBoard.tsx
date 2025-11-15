@@ -56,10 +56,10 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
         clearInterval(progressInterval);
         
         // Sync game state to server for online games
-        if (gameState.isOnline && roomId) {
+        // Use fresh state from game object, not component state
+        const freshState = game.getState();
+        if (freshState.isOnline && roomId) {
           try {
-            // Get fresh state after spin
-            const freshState = game.getState();
             await fetch('/api/rooms/game-state', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -190,12 +190,18 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
             const currentState = game.getState();
             let stateChanged = false;
             
-            // Update currentPlayerIndex from server
+            // Update currentPlayerIndex from server - CRITICAL for turn progression
             if (serverState.currentPlayerIndex !== undefined && serverState.currentPlayerIndex !== currentState.currentPlayerIndex) {
               // Directly update the game's internal state
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               (game as any).state.currentPlayerIndex = serverState.currentPlayerIndex;
               stateChanged = true;
+              // Force immediate update to ensure UI reflects the change right away
+              const updatedState = game.getState();
+              setGameState({ 
+                ...updatedState,
+                players: updatedState.players.map(p => ({ ...p }))
+              });
             }
             
             // Update currentSpin from server (if provided, otherwise use currentPlayerIndex)
@@ -208,7 +214,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
               stateChanged = true;
             }
             
-            // Sync player words from server
+            // Sync player words from server - CRITICAL for showing words to players
             if (serverState.playerWords) {
               type PlayerWordData = { word: string; type: 'normal' | 'similar' | 'imposter' };
               Object.entries(serverState.playerWords).forEach(([playerIdStr, wordData]) => {
@@ -217,7 +223,8 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const player = (game as any).state.players.find((p: { id: number }) => p.id === playerId);
                 if (player && wordDataTyped.word && wordDataTyped.type) {
-                  if (player.currentWord !== wordDataTyped.word) {
+                  // Always update if word is different or missing
+                  if (player.currentWord !== wordDataTyped.word || !player.currentWord) {
                     player.currentWord = wordDataTyped.word;
                     player.wordType = wordDataTyped.type;
                     stateChanged = true;
@@ -265,6 +272,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
               }
             }
             
+            // Always update component state if anything changed
             if (stateChanged) {
               // Force a fresh state update with deep copy of players array
               const updatedState = game.getState();
@@ -278,7 +286,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
       } catch (error) {
         console.error('Error polling game state:', error);
       }
-    }, 500); // Poll every 500ms for faster updates
+    }, 300); // Poll every 300ms for faster updates
     
     return () => clearInterval(pollInterval);
   }, [gameState.isOnline, roomId, game]);
