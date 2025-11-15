@@ -481,7 +481,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                   }
                   
                   // Find viewing player - try by ID first
-                  let viewingPlayer = viewingPlayerId 
+                  const viewingPlayer = viewingPlayerId 
                     ? currentGameState.players.find(p => p.id === viewingPlayerId)
                     : null;
                   
