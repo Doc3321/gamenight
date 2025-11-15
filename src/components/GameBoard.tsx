@@ -58,16 +58,19 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
         // Sync game state to server for online games
         if (gameState.isOnline && roomId) {
           try {
+            // Get fresh state after spin
+            const freshState = game.getState();
             await fetch('/api/rooms/game-state', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 roomId,
                 gameStateData: {
-                  currentPlayerIndex: newState.currentPlayerIndex,
-                  votingPhase: newState.votingPhase,
-                  votingActivated: newState.votingActivated,
-                  playerWords: newState.players.reduce((acc, p) => {
+                  currentPlayerIndex: freshState.currentPlayerIndex,
+                  currentSpin: freshState.currentSpin, // Also sync currentSpin
+                  votingPhase: freshState.votingPhase,
+                  votingActivated: freshState.votingActivated,
+                  playerWords: freshState.players.reduce((acc, p) => {
                     if (p.currentWord) {
                       acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
                     }
@@ -112,6 +115,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
               roomId,
               gameStateData: {
                 currentPlayerIndex: updatedState.currentPlayerIndex,
+                currentSpin: updatedState.currentSpin,
                 votingPhase: updatedState.votingPhase,
                 votingActivated: updatedState.votingActivated,
                 playerWords: updatedState.players.reduce((acc, p) => {
@@ -147,6 +151,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
               roomId,
               gameStateData: {
                 currentPlayerIndex: updatedState.currentPlayerIndex,
+                currentSpin: updatedState.currentSpin,
                 votingPhase: updatedState.votingPhase,
                 votingActivated: updatedState.votingActivated,
                 playerWords: updatedState.players.reduce((acc, p) => {
@@ -190,16 +195,17 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
               // Directly update the game's internal state
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               (game as any).state.currentPlayerIndex = serverState.currentPlayerIndex;
-              // Also update currentSpin to match
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              (game as any).state.currentSpin = serverState.currentPlayerIndex;
               stateChanged = true;
-              // Force immediate state update to ensure UI reflects the change
-              const updatedState = game.getState();
-              setGameState({ 
-                ...updatedState,
-                players: updatedState.players.map(p => ({ ...p }))
-              });
+            }
+            
+            // Update currentSpin from server (if provided, otherwise use currentPlayerIndex)
+            const serverCurrentSpin = serverState.currentSpin !== undefined 
+              ? serverState.currentSpin 
+              : serverState.currentPlayerIndex;
+            if (serverCurrentSpin !== undefined && serverCurrentSpin !== currentState.currentSpin) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (game as any).state.currentSpin = serverCurrentSpin;
+              stateChanged = true;
             }
             
             // Sync player words from server

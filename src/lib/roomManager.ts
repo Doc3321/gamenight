@@ -27,6 +27,7 @@ export interface GameRoom {
   // Real-time game state
   gameStateData?: {
     currentPlayerIndex: number;
+    currentSpin?: number; // Add currentSpin to game state data
     votingPhase: boolean;
     votingActivated: boolean;
     eliminatedPlayer?: { id: number; name: string; wordType?: 'normal' | 'similar' | 'imposter'; votes?: number };
