@@ -330,7 +330,14 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
 
   // Show voting phase if all players have received words - check game state directly
   const currentGameStateForVoting = game.getState();
-  if (currentGameStateForVoting.votingPhase && currentGameStateForVoting.currentPlayerIndex >= currentGameStateForVoting.players.length) {
+  // Check if all players have words (currentPlayerIndex >= players.length means all have spun)
+  const allPlayersHaveWords = currentGameStateForVoting.currentPlayerIndex >= currentGameStateForVoting.players.length;
+  // Also verify all players actually have words assigned (double check)
+  const allPlayersHaveWordsAssigned = currentGameStateForVoting.players.every(p => p.currentWord !== undefined);
+  
+  // Show voting phase if all players have words (regardless of votingPhase flag)
+  // The VotingPhase component will handle showing the activate button if needed
+  if (allPlayersHaveWords && allPlayersHaveWordsAssigned) {
     // For online mode, show voting to current viewing player
     // For local mode, show voting to next player who hasn't voted
     if (gameState.isOnline && viewingPlayerId) {
