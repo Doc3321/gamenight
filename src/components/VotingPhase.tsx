@@ -29,6 +29,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   const [gameState, setGameState] = useState(game.getState());
   const [showResults, setShowResults] = useState(false);
   const [eliminatedPlayer, setEliminatedPlayer] = useState<Player | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [tiedPlayers, setTiedPlayers] = useState<Player[]>([]);
   const [showTieResults, setShowTieResults] = useState(false);
   const [showWrongElimination, setShowWrongElimination] = useState(false);
@@ -407,6 +408,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             
             // Sync voting activation - always sync when server has a value
             if (serverState.votingActivated !== undefined) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const currentActivated = (game as any).state.votingActivated;
               if (serverState.votingActivated !== currentActivated) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -597,7 +599,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     
     const interval = setInterval(syncGameState, 500); // Poll every 500ms for faster updates
     return () => clearInterval(interval);
-  }, [roomId, gameState.isOnline, gameState.players, gameState.votingActivated, gameState.votingPhase, game, showTieResults]);
+  }, [roomId, gameState.isOnline, gameState.players, gameState.votingActivated, gameState.votingPhase, game, showTieResults, showResults, showWrongElimination]);
 
   useEffect(() => {
     if (!gameState.isOnline) {
