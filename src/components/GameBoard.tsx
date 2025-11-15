@@ -467,7 +467,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                 return null; // Spinning animation is shown separately
               }
               
-              if (gameState.isOnline && viewingPlayerId) {
+              if (gameState.isOnline) {
                 // Check both component state and game state for currentPlayerIndex
                 const currentGameState = game.getState();
                 const currentPlayerIndex = currentGameState.currentPlayerIndex;
@@ -475,9 +475,54 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                 
                 if (canSpin) {
                   const currentSpinningPlayer = currentGameState.players[currentPlayerIndex];
-                  const viewingPlayer = currentGameState.players.find(p => p.id === viewingPlayerId);
+                  
+                  if (!currentSpinningPlayer) {
+                    return null;
+                  }
+                  
+                  // Find viewing player - try by ID first
+                  let viewingPlayer = viewingPlayerId 
+                    ? currentGameState.players.find(p => p.id === viewingPlayerId)
+                    : null;
+                  
+                  // If not found by ID, try to find player by checking if currentSpinningPlayer 
+                  // matches any player (this handles cases where viewingPlayerId is wrong)
+                  // We'll determine turn by checking if currentSpinningPlayer's index matches
+                  // the expected player position
+                  
                   const hasMyWord = viewingPlayer?.currentWord !== undefined;
-                  const isMyTurn = currentSpinningPlayer && currentSpinningPlayer.id === viewingPlayerId;
+                  
+                  // Check if it's my turn
+                  // Primary check: compare IDs if viewingPlayerId is valid
+                  // Secondary check: if viewingPlayerId is 0/undefined but we have currentPlayerIdString,
+                  // we can infer it's their turn if currentPlayerIndex matches their expected position
+                  // For now, use the simpler approach: if currentSpinningPlayer exists and 
+                  // viewingPlayerId matches, or if we can't find viewingPlayer but currentSpinningPlayer
+                  // is at the expected index, allow it
+                  let isMyTurn = false;
+                  
+                  if (viewingPlayerId && currentSpinningPlayer.id === viewingPlayerId) {
+                    // Direct ID match
+                    isMyTurn = true;
+                  } else if (viewingPlayer && currentSpinningPlayer.name === viewingPlayer.name) {
+                    // Name match as fallback
+                    isMyTurn = true;
+                  } else if (!viewingPlayer && viewingPlayerId === 0) {
+                    // viewingPlayerId is 0 (which means findIndex returned -1, player not found by name match)
+                    // In this case, we can't reliably determine, so be conservative
+                    // But actually, if viewingPlayerId is 0, it means the calculation failed
+                    // Let's try a different approach: check all players to see if any match
+                    // For now, default to false to be safe
+                    isMyTurn = false;
+                  }
+                  
+                  // Additional safety: if we still can't determine and it's the first player's turn,
+                  // and viewingPlayerId might be incorrectly calculated, be more permissive
+                  // This is a workaround for the ID calculation issue
+                  if (!isMyTurn && currentPlayerIndex === 0 && !viewingPlayer) {
+                    // Might be the first player, allow them to try
+                    // Actually no, this is too permissive. Let's not do this.
+                  }
                 
                 // If player already has their word, show status message
                 if (hasMyWord && !isMyTurn) {
