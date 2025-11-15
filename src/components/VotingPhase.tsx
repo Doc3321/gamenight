@@ -50,6 +50,21 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       if (!isActivated) return;
     }
     
+    // Prevent duplicate votes - check if player has already voted for this type
+    const currentStateBeforeVote = game.getState();
+    const currentPlayerBeforeVote = currentStateBeforeVote.players.find(p => p.id === currentPlayerId);
+    if (currentPlayerBeforeVote) {
+      if (voteType === 'imposter' && currentPlayerBeforeVote.votedForImposter !== undefined) {
+        return; // Already voted for imposter
+      }
+      if (voteType === 'other-word' && currentPlayerBeforeVote.votedForOtherWord !== undefined) {
+        return; // Already voted for other word
+      }
+      if (!voteType && currentPlayerBeforeVote.hasVoted) {
+        return; // Already voted
+      }
+    }
+    
     const success = game.castVote(currentPlayerId, target, voteType);
     if (success) {
       const newState = game.getState();
@@ -111,69 +126,74 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
         : currentPlayer?.hasVoted;
       
       // For online mode: increment currentVotingPlayerIndex after player completes voting
+      // Only increment once per player - check if this player is the current voting player
       if (newState.isOnline && isComplete) {
         const activePlayersList = newState.players.filter(p => !p.isEliminated);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const currentVotingIdx = (game as any).state.currentVotingPlayerIndex ?? 0;
         
-        // Move to next player if not all have voted
-        if (currentVotingIdx < activePlayersList.length - 1) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (game as any).state.currentVotingPlayerIndex = currentVotingIdx + 1;
-          
-          // Sync updated currentVotingPlayerIndex to server
-          try {
-            const updatedState = game.getState();
-            // Get votingActivated value from updated state
-            const votingActivatedValue = updatedState.votingActivated === true || newState.votingActivated === true;
+        // Verify that the current player is actually the one whose turn it is to vote
+        const currentVotingPlayer = activePlayersList[currentVotingIdx];
+        if (currentVotingPlayer && currentVotingPlayer.id === currentPlayerId) {
+          // Move to next player if not all have voted
+          if (currentVotingIdx < activePlayersList.length - 1) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (game as any).state.currentVotingPlayerIndex = currentVotingIdx + 1;
             
-            // Recalculate votes from updated state
-            const votesForSync: Record<string, { voterId: number; targetId: number; voteType?: 'imposter' | 'other-word' }> = {};
-            updatedState.players.forEach(player => {
-              if (player.hasVoted || player.votedForImposter !== undefined || player.votedForOtherWord !== undefined) {
-                if (updatedState.gameMode === 'mixed') {
-                  if (player.votedForImposter !== undefined) {
-                    votesForSync[`${player.id}_imposter`] = { voterId: player.id, targetId: player.votedForImposter, voteType: 'imposter' };
-                  }
-                  if (player.votedForOtherWord !== undefined) {
-                    votesForSync[`${player.id}_other`] = { voterId: player.id, targetId: player.votedForOtherWord, voteType: 'other-word' };
-                  }
-                } else if (player.votedFor !== undefined) {
-                  votesForSync[player.id.toString()] = { voterId: player.id, targetId: player.votedFor };
-                }
-              }
-            });
-            
-            await fetch('/api/rooms/game-state', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                roomId,
-                gameStateData: {
-                  currentPlayerIndex: updatedState.currentPlayerIndex,
-                  currentVotingPlayerIndex: updatedState.currentVotingPlayerIndex,
-                  votingPhase: updatedState.votingPhase,
-                  votingActivated: votingActivatedValue,
-                  votes: votesForSync,
-                  playerWords: updatedState.players.reduce((acc, p) => {
-                    if (p.currentWord) {
-                      acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
+            // Sync updated currentVotingPlayerIndex to server
+            try {
+              const updatedState = game.getState();
+              // Get votingActivated value from updated state
+              const votingActivatedValue = updatedState.votingActivated === true || newState.votingActivated === true;
+              
+              // Recalculate votes from updated state
+              const votesForSync: Record<string, { voterId: number; targetId: number; voteType?: 'imposter' | 'other-word' }> = {};
+              updatedState.players.forEach(player => {
+                if (player.hasVoted || player.votedForImposter !== undefined || player.votedForOtherWord !== undefined) {
+                  if (updatedState.gameMode === 'mixed') {
+                    if (player.votedForImposter !== undefined) {
+                      votesForSync[`${player.id}_imposter`] = { voterId: player.id, targetId: player.votedForImposter, voteType: 'imposter' };
                     }
-                    return acc;
-                  }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
+                    if (player.votedForOtherWord !== undefined) {
+                      votesForSync[`${player.id}_other`] = { voterId: player.id, targetId: player.votedForOtherWord, voteType: 'other-word' };
+                    }
+                  } else if (player.votedFor !== undefined) {
+                    votesForSync[player.id.toString()] = { voterId: player.id, targetId: player.votedFor };
+                  }
                 }
-              })
-            });
-          } catch (error) {
-            console.error('Error syncing voting index:', error);
-          }
-        } else {
-          // All players have voted - calculate results
-          setTimeout(() => {
-            if (game.allPlayersVoted() && !showResults && !showTieResults && !showWrongElimination) {
-              handleCalculateResults();
+              });
+              
+              await fetch('/api/rooms/game-state', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  roomId,
+                  gameStateData: {
+                    currentPlayerIndex: updatedState.currentPlayerIndex,
+                    currentVotingPlayerIndex: updatedState.currentVotingPlayerIndex,
+                    votingPhase: updatedState.votingPhase,
+                    votingActivated: votingActivatedValue,
+                    votes: votesForSync,
+                    playerWords: updatedState.players.reduce((acc, p) => {
+                      if (p.currentWord) {
+                        acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
+                      }
+                      return acc;
+                    }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
+                  }
+                })
+              });
+            } catch (error) {
+              console.error('Error syncing voting index:', error);
             }
-          }, 600);
+          } else {
+            // All players have voted - calculate results
+            setTimeout(() => {
+              if (game.allPlayersVoted() && !showResults && !showTieResults && !showWrongElimination) {
+                handleCalculateResults();
+              }
+            }, 600);
+          }
         }
       }
       
@@ -560,10 +580,24 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                 });
                 stateChanged = true;
               } else {
-                // Reset vote counts and voting status first
+                // Reset vote counts first (but preserve voting status - we'll update it from server)
                 currentState.players.forEach(p => {
                   p.votes = 0;
-                  if (!p.isEliminated) {
+                });
+                
+                // First, collect which players have votes on the server
+                const playersWithServerVotes = new Set<number>();
+                Object.entries(serverState.votes).forEach(([, voteData]) => {
+                  type VoteData = { voterId: number; targetId: number; voteType?: 'imposter' | 'other-word' };
+                  const vote = voteData as VoteData;
+                  playersWithServerVotes.add(vote.voterId);
+                });
+                
+                // Only reset voting status for players who don't have votes on the server
+                // This prevents clearing votes that are in the process of being synced
+                currentState.players.forEach(p => {
+                  if (!p.isEliminated && !playersWithServerVotes.has(p.id)) {
+                    // Only reset if this player doesn't have a vote on the server
                     p.hasVoted = false;
                     p.votedFor = undefined;
                     p.votedForImposter = undefined;
