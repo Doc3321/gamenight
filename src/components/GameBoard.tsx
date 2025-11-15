@@ -597,7 +597,11 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                   // This should be the primary check since viewingPlayerId = index + 1
                   if (viewingPlayerId !== undefined && viewingPlayerId !== null && viewingPlayerId > 0) {
                     const expectedIndex = viewingPlayerId - 1;
-                    if (expectedIndex === currentPlayerIndex && expectedIndex >= 0 && expectedIndex < currentGameState.players.length) {
+                    // Check if expectedIndex matches currentPlayerIndex and is valid
+                    // For last player: expectedIndex = players.length - 1, which should equal currentPlayerIndex
+                    if (expectedIndex === currentPlayerIndex && 
+                        expectedIndex >= 0 && 
+                        expectedIndex < currentGameState.players.length) {
                       isMyTurn = true;
                     }
                   }
@@ -655,13 +659,22 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                   viewingPlayerIndex = viewingPlayerId - 1;
                 }
                 
-                const isMyTurnByIndex = viewingPlayerIndex === currentPlayerIndex && viewingPlayerIndex >= 0;
+                // For last player, allow index match even if viewingPlayerIndex equals players.length - 1
+                const isMyTurnByIndex = viewingPlayerIndex === currentPlayerIndex && 
+                                       viewingPlayerIndex >= 0 && 
+                                       viewingPlayerIndex < currentGameState.players.length;
                 
                 // Additional check: if viewingPlayerId matches currentSpinningPlayer.id, it's definitely their turn
                 const isMyTurnById = viewingPlayerId !== undefined && viewingPlayerId !== null && 
                                      currentSpinningPlayer && currentSpinningPlayer.id === viewingPlayerId;
                 
-                if ((isMyTurn || isMyTurnByIndex || isMyTurnById) && !hasMyWord && !showResult) {
+                // Last resort: if it's the last player's turn and viewingPlayerId matches the last player's ID
+                const isLastPlayerTurn = viewingPlayerId !== undefined && viewingPlayerId !== null &&
+                                        currentPlayerIndex === currentGameState.players.length - 1 &&
+                                        viewingPlayerId === currentGameState.players.length &&
+                                        !hasMyWord;
+                
+                if ((isMyTurn || isMyTurnByIndex || isMyTurnById || isLastPlayerTurn) && !hasMyWord && !showResult) {
                   return (
                     <Button 
                       onClick={handleSpin} 
