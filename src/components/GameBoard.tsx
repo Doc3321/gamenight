@@ -350,7 +350,9 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
   
   // CRITICAL: Only show voting phase if ALL players have spun AND all have words assigned
   // This ensures the last player has gotten their word before voting starts
-  if (allPlayersHaveSpun && allPlayersHaveWordsAssigned) {
+  // Also check that we're not still in the spinning phase (currentPlayerIndex < players.length means someone still needs to spin)
+  const stillSpinning = currentGameStateForVoting.currentPlayerIndex < currentGameStateForVoting.players.length;
+  if (!stillSpinning && allPlayersHaveSpun && allPlayersHaveWordsAssigned) {
     // For online mode, use sequential voting like word-getting process
     // Only show voting UI to the current voting player
     if (gameState.isOnline && viewingPlayerId) {
@@ -548,6 +550,8 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                 // Check both component state and game state for currentPlayerIndex
                 const currentGameState = game.getState();
                 const currentPlayerIndex = currentGameState.currentPlayerIndex;
+                // Allow spinning if currentPlayerIndex is less than players.length
+                // This includes the last player (when index is players.length - 1)
                 const canSpin = currentPlayerIndex < currentGameState.players.length;
                 
                 if (canSpin) {
@@ -637,7 +641,12 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                 }
                 
                 // If it's my turn and I don't have my word yet, show spin button
-                if (isMyTurn && !hasMyWord && !showResult) {
+                // CRITICAL: Also check if viewingPlayer exists and their index matches currentPlayerIndex
+                // This ensures the last player can always get their word
+                const viewingPlayerIndex = viewingPlayer ? currentGameState.players.findIndex(p => p.id === viewingPlayer.id) : -1;
+                const isMyTurnByIndex = viewingPlayerIndex === currentPlayerIndex && viewingPlayerIndex >= 0;
+                
+                if ((isMyTurn || isMyTurnByIndex) && !hasMyWord && !showResult) {
                   return (
                     <Button 
                       onClick={handleSpin} 
