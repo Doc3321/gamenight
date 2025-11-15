@@ -194,6 +194,12 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               (game as any).state.currentSpin = serverState.currentPlayerIndex;
               stateChanged = true;
+              // Force immediate state update to ensure UI reflects the change
+              const updatedState = game.getState();
+              setGameState({ 
+                ...updatedState,
+                players: updatedState.players.map(p => ({ ...p }))
+              });
             }
             
             // Sync player words from server
@@ -480,48 +486,44 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                     return null;
                   }
                   
-                  // Find viewing player - try by ID first
-                  const viewingPlayer = viewingPlayerId 
-                    ? currentGameState.players.find(p => p.id === viewingPlayerId)
-                    : null;
+                  // Find viewing player - viewingPlayerId is calculated as findIndex(...) + 1
+                  // So it should match the player ID (which is also index + 1)
+                  let viewingPlayer = null;
                   
-                  // If not found by ID, try to find player by checking if currentSpinningPlayer 
-                  // matches any player (this handles cases where viewingPlayerId is wrong)
-                  // We'll determine turn by checking if currentSpinningPlayer's index matches
-                  // the expected player position
+                  // Method 1: Try by ID first (viewingPlayerId should match player.id)
+                  if (viewingPlayerId !== undefined && viewingPlayerId !== null) {
+                    viewingPlayer = currentGameState.players.find(p => p.id === viewingPlayerId);
+                  }
+                  
+                  // Method 2: If not found by ID, try by index (viewingPlayerId = index + 1)
+                  if (!viewingPlayer && viewingPlayerId !== undefined && viewingPlayerId > 0) {
+                    const possibleIndex = viewingPlayerId - 1;
+                    if (possibleIndex >= 0 && possibleIndex < currentGameState.players.length) {
+                      viewingPlayer = currentGameState.players[possibleIndex];
+                    }
+                  }
                   
                   const hasMyWord = viewingPlayer?.currentWord !== undefined;
                   
                   // Check if it's my turn
-                  // Primary check: compare IDs if viewingPlayerId is valid
-                  // Secondary check: if viewingPlayerId is 0/undefined but we have currentPlayerIdString,
-                  // we can infer it's their turn if currentPlayerIndex matches their expected position
-                  // For now, use the simpler approach: if currentSpinningPlayer exists and 
-                  // viewingPlayerId matches, or if we can't find viewingPlayer but currentSpinningPlayer
-                  // is at the expected index, allow it
+                  // viewingPlayerId is calculated as findIndex(...) + 1, which matches player.id
+                  // So we can check: currentSpinningPlayer.id === viewingPlayerId
+                  // OR: currentPlayerIndex === viewingPlayerId - 1
                   let isMyTurn = false;
                   
-                  if (viewingPlayerId && currentSpinningPlayer.id === viewingPlayerId) {
-                    // Direct ID match
-                    isMyTurn = true;
-                  } else if (viewingPlayer && currentSpinningPlayer.name === viewingPlayer.name) {
-                    // Name match as fallback
-                    isMyTurn = true;
-                  } else if (!viewingPlayer && viewingPlayerId === 0) {
-                    // viewingPlayerId is 0 (which means findIndex returned -1, player not found by name match)
-                    // In this case, we can't reliably determine, so be conservative
-                    // But actually, if viewingPlayerId is 0, it means the calculation failed
-                    // Let's try a different approach: check all players to see if any match
-                    // For now, default to false to be safe
-                    isMyTurn = false;
-                  }
-                  
-                  // Additional safety: if we still can't determine and it's the first player's turn,
-                  // and viewingPlayerId might be incorrectly calculated, be more permissive
-                  // This is a workaround for the ID calculation issue
-                  if (!isMyTurn && currentPlayerIndex === 0 && !viewingPlayer) {
-                    // Might be the first player, allow them to try
-                    // Actually no, this is too permissive. Let's not do this.
+                  if (viewingPlayerId !== undefined && viewingPlayerId !== null) {
+                    // Primary check: ID match (most reliable)
+                    if (currentSpinningPlayer.id === viewingPlayerId) {
+                      isMyTurn = true;
+                    }
+                    // Fallback: Index match (if IDs don't match for some reason)
+                    else if (currentPlayerIndex === viewingPlayerId - 1) {
+                      isMyTurn = true;
+                    }
+                    // Additional fallback: Name match (if we found viewingPlayer)
+                    else if (viewingPlayer && currentSpinningPlayer.name === viewingPlayer.name) {
+                      isMyTurn = true;
+                    }
                   }
                 
                 // If player already has their word, show status message
