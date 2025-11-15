@@ -569,7 +569,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               }
             }
             
-            // Sync eliminated player state
+            // Sync eliminated player state - always sync from server to ensure all clients see results
             if (serverState.eliminatedPlayer !== undefined) {
               if (!serverState.eliminatedPlayer || serverState.eliminatedPlayer === null) {
                 // Clear eliminated player (continue after elimination)
@@ -581,8 +581,9 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (game as any).state.wrongElimination = false;
                 stateChanged = true;
-              } else if (!showResults && !showWrongElimination && !showTieResults) {
-                // Set eliminated player
+              } else {
+                // Always sync eliminated player from server, even if local state already shows results
+                // This ensures all clients see the same results
                 const currentState = game.getState();
                 const eliminated = currentState.players.find(p => p.id === serverState.eliminatedPlayer.id);
                 if (eliminated) {
@@ -590,10 +591,13 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                   eliminated.votes = serverState.eliminatedPlayer.votes || 0;
                   setEliminatedPlayer(eliminated);
                   
+                  // Always update show flags based on server state
                   if (serverState.wrongElimination) {
                     setShowWrongElimination(true);
+                    setShowResults(false);
                   } else {
                     setShowResults(true);
+                    setShowWrongElimination(false);
                     if (eliminated.wordType === 'imposter' || eliminated.wordType === 'similar') {
                       setShowConfetti(true);
                     }
@@ -820,86 +824,17 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   const isBothMode = currentGameStateForRender.gameMode === 'mixed';
   const showVoteCounts = currentGameStateForRender.showVoteCounts; // false for online, true for local
 
-  // Admin activation screen (online mode only) - only show if not showing results
-  const isVotingActivatedForAdmin = currentGameStateForRender.votingActivated === true || gameState.votingActivated === true;
-  if (gameState.isOnline && !isVotingActivatedForAdmin && isAdmin && !showResults && !showWrongElimination && !showTieResults) {
-    return (
-      <div className="max-w-2xl mx-auto relative">
-        <ClassifiedStamp level="TOP SECRET" />
-        <AgentScanLine />
-        <Card className="relative overflow-hidden border-2 border-purple-500/30 dark:border-purple-400/50">
-          <CardHeader className="text-center relative">
-            <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <CardTitle className="text-3xl font-mono tracking-wider bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 bg-clip-text text-transparent">
-                הפעל הצבעה
-              </CardTitle>
-              <p className="text-xs text-muted-foreground uppercase tracking-widest mt-2">
-                ACTIVATE VOTING PHASE
-              </p>
-            </motion.div>
-          </CardHeader>
-          <CardContent className="text-center space-y-6 relative">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.2 }}
-            >
-              <AgentSpinner size="md" />
-            </motion.div>
-            <p className="text-muted-foreground">
-              כל השחקנים קיבלו את המילים שלהם. לחץ כדי להתחיל את שלב ההצבעה.
-            </p>
-            <Button 
-              onClick={handleActivateVoting} 
-              size="lg"
-              className="bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 hover:from-purple-700 hover:via-pink-700 hover:to-orange-600 shadow-lg text-white font-semibold"
-            >
-              הפעל הצבעה
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Waiting for admin to activate (online mode) - check both component state and game state
-  // Only show if not showing results
-  // Use the already-fetched currentGameStateForRender to avoid multiple getState() calls
-  const isVotingActivated = currentGameStateForRender.votingActivated === true || gameState.votingActivated === true;
-  if (gameState.isOnline && !isVotingActivated && !isAdmin && !showResults && !showWrongElimination && !showTieResults) {
-    return (
-      <div className="max-w-2xl mx-auto relative">
-        <ClassifiedStamp level="SECRET" />
-        <AgentScanLine />
-        <Card className="relative overflow-hidden border-2 border-purple-500/30 dark:border-purple-400/50">
-          <CardHeader className="text-center">
-            <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <CardTitle className="text-3xl font-mono tracking-wider bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 bg-clip-text text-transparent">
-                ממתין להפעלת הצבעה
-              </CardTitle>
-              <p className="text-xs text-muted-foreground uppercase tracking-widest mt-2">
-                AWAITING HOST AUTHORIZATION
-              </p>
-            </motion.div>
-          </CardHeader>
-          <CardContent className="text-center space-y-6">
-            <AgentSpinner size="lg" message="ממתין למארח..." />
-            <p className="text-muted-foreground">
-              המארח צריך להפעיל את שלב ההצבעה
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Wrong elimination screen
+  // Check if there's an eliminated player from game state (results should be shown first)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const hasEliminatedPlayer = (game as any).state.eliminatedPlayer !== undefined && (game as any).state.eliminatedPlayer !== null;
+  
+  // Also check component state for eliminated player
+  const hasEliminatedPlayerInState = eliminatedPlayer !== null && eliminatedPlayer !== undefined;
+  
+  // Show results screens FIRST before any activation screens
+  // This ensures all players see results when they're available
+  
+  // Wrong elimination screen - check FIRST
   if (showWrongElimination && eliminatedPlayer) {
     return (
       <div className="max-w-2xl mx-auto">
@@ -941,7 +876,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     );
   }
 
-  // Tie results screen - simplified, just revote option
+  // Tie results screen - check SECOND
   if (showTieResults) {
     return (
       <div className="max-w-2xl mx-auto">
@@ -969,7 +904,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     );
   }
 
-  // Correct elimination screen
+  // Correct elimination screen - check THIRD
   if (showResults && eliminatedPlayer) {
     const eliminationType = eliminatedPlayer.wordType;
     const typeText = eliminationType === 'imposter' 
@@ -1033,6 +968,88 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             </CardContent>
           </Card>
         </motion.div>
+      </div>
+    );
+  }
+  
+  // Admin activation screen (online mode only) - only show if not showing results AND no eliminated player
+  // Make absolutely sure isAdmin is true - double check
+  const isVotingActivatedForAdmin = currentGameStateForRender.votingActivated === true || gameState.votingActivated === true;
+  const shouldShowAdminButton = gameState.isOnline && !isVotingActivatedForAdmin && isAdmin === true && !hasEliminatedPlayer && !hasEliminatedPlayerInState && !showResults && !showWrongElimination && !showTieResults;
+  if (shouldShowAdminButton) {
+    return (
+      <div className="max-w-2xl mx-auto relative">
+        <ClassifiedStamp level="TOP SECRET" />
+        <AgentScanLine />
+        <Card className="relative overflow-hidden border-2 border-purple-500/30 dark:border-purple-400/50">
+          <CardHeader className="text-center relative">
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <CardTitle className="text-3xl font-mono tracking-wider bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 bg-clip-text text-transparent">
+                הפעל הצבעה
+              </CardTitle>
+              <p className="text-xs text-muted-foreground uppercase tracking-widest mt-2">
+                ACTIVATE VOTING PHASE
+              </p>
+            </motion.div>
+          </CardHeader>
+          <CardContent className="text-center space-y-6 relative">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.2 }}
+            >
+              <AgentSpinner size="md" />
+            </motion.div>
+            <p className="text-muted-foreground">
+              כל השחקנים קיבלו את המילים שלהם. לחץ כדי להתחיל את שלב ההצבעה.
+            </p>
+            <Button 
+              onClick={handleActivateVoting} 
+              size="lg"
+              className="bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 hover:from-purple-700 hover:via-pink-700 hover:to-orange-600 shadow-lg text-white font-semibold"
+            >
+              הפעל הצבעה
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Waiting for admin to activate (online mode) - check both component state and game state
+  // Only show if not showing results AND no eliminated player AND definitely not admin
+  // Use the already-fetched currentGameStateForRender to avoid multiple getState() calls
+  const isVotingActivated = currentGameStateForRender.votingActivated === true || gameState.votingActivated === true;
+  const shouldShowWaitingScreen = gameState.isOnline && !isVotingActivated && isAdmin === false && !showResults && !showWrongElimination && !showTieResults && !hasEliminatedPlayer && !hasEliminatedPlayerInState;
+  if (shouldShowWaitingScreen) {
+    return (
+      <div className="max-w-2xl mx-auto relative">
+        <ClassifiedStamp level="SECRET" />
+        <AgentScanLine />
+        <Card className="relative overflow-hidden border-2 border-purple-500/30 dark:border-purple-400/50">
+          <CardHeader className="text-center">
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <CardTitle className="text-3xl font-mono tracking-wider bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 bg-clip-text text-transparent">
+                ממתין להפעלת הצבעה
+              </CardTitle>
+              <p className="text-xs text-muted-foreground uppercase tracking-widest mt-2">
+                AWAITING HOST AUTHORIZATION
+              </p>
+            </motion.div>
+          </CardHeader>
+          <CardContent className="text-center space-y-6">
+            <AgentSpinner size="lg" message="ממתין למארח..." />
+            <p className="text-muted-foreground">
+              המארח צריך להפעיל את שלב ההצבעה
+            </p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
