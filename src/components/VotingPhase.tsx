@@ -124,6 +124,8 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
           // Sync updated currentVotingPlayerIndex to server
           try {
             const updatedState = game.getState();
+            // Get votingActivated value from updated state
+            const votingActivatedValue = updatedState.votingActivated === true || newState.votingActivated === true;
             await fetch('/api/rooms/game-state', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -324,11 +326,10 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
         }
       }
     }
-  }, [game, roomId, gameState.isOnline]);
+  }, [game, roomId, gameState.isOnline, showResults, showTieResults, showWrongElimination]);
 
   const handleRevote = async () => {
     game.revote();
-    const newState = game.getState();
     // Reset voting activation so admin needs to activate again
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (game as any).state.votingActivated = false;
@@ -416,7 +417,6 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     // Reset currentVotingPlayerIndex to 0 for sequential voting
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (game as any).state.currentVotingPlayerIndex = 0;
-    const newState = game.getState();
     
     // Clear any previous results when activating new voting round
     setShowResults(false);
@@ -811,7 +811,6 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   const handleContinueAfterElimination = async () => {
     // Use the game's continueAfterWrongElimination method to properly reset state
     game.continueAfterWrongElimination();
-    const newState = game.getState();
     // Reset voting activation so admin needs to activate again for next round
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (game as any).state.votingActivated = false;
