@@ -126,6 +126,24 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             const updatedState = game.getState();
             // Get votingActivated value from updated state
             const votingActivatedValue = updatedState.votingActivated === true || newState.votingActivated === true;
+            
+            // Recalculate votes from updated state
+            const votesForSync: Record<string, { voterId: number; targetId: number; voteType?: 'imposter' | 'other-word' }> = {};
+            updatedState.players.forEach(player => {
+              if (player.hasVoted || player.votedForImposter !== undefined || player.votedForOtherWord !== undefined) {
+                if (updatedState.gameMode === 'mixed') {
+                  if (player.votedForImposter !== undefined) {
+                    votesForSync[`${player.id}_imposter`] = { voterId: player.id, targetId: player.votedForImposter, voteType: 'imposter' };
+                  }
+                  if (player.votedForOtherWord !== undefined) {
+                    votesForSync[`${player.id}_other`] = { voterId: player.id, targetId: player.votedForOtherWord, voteType: 'other-word' };
+                  }
+                } else if (player.votedFor !== undefined) {
+                  votesForSync[player.id.toString()] = { voterId: player.id, targetId: player.votedFor };
+                }
+              }
+            });
+            
             await fetch('/api/rooms/game-state', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -136,7 +154,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                   currentVotingPlayerIndex: updatedState.currentVotingPlayerIndex,
                   votingPhase: updatedState.votingPhase,
                   votingActivated: votingActivatedValue,
-                  votes,
+                  votes: votesForSync,
                   playerWords: updatedState.players.reduce((acc, p) => {
                     if (p.currentWord) {
                       acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
