@@ -164,6 +164,11 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   };
 
   const handleCalculateResults = useCallback(async () => {
+    // Prevent multiple calls - if results are already showing, don't calculate again
+    if (showResults || showTieResults || showWrongElimination) {
+      return;
+    }
+    
     const result = game.calculateVotingResult();
     const newState = game.getState();
     setGameState(newState);
@@ -283,7 +288,11 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   const handleRevote = async () => {
     game.revote();
     const newState = game.getState();
-    setGameState(newState);
+    // Reset voting activation so admin needs to activate again
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (game as any).state.votingActivated = false;
+    const updatedState = game.getState();
+    setGameState(updatedState);
     setShowTieResults(false);
     setTiedPlayers([]);
     setSelectedTarget(null);
@@ -299,14 +308,14 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
           body: JSON.stringify({
             roomId,
             gameStateData: {
-              currentPlayerIndex: newState.currentPlayerIndex,
-              votingPhase: newState.votingPhase,
-              votingActivated: newState.votingActivated,
+              currentPlayerIndex: updatedState.currentPlayerIndex,
+              votingPhase: updatedState.votingPhase,
+              votingActivated: false, // Reset activation
               isTie: false,
               wrongElimination: false,
               eliminatedPlayer: undefined,
               votes: {},
-              playerWords: newState.players.reduce((acc, p) => {
+              playerWords: updatedState.players.reduce((acc, p) => {
                 if (p.currentWord) {
                   acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
                 }
@@ -624,8 +633,16 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
           const response = await fetch(`/api/rooms/game-state?roomId=${roomId}`);
           if (response.ok) {
             const data = await response.json();
-            if (data.room?.gameStateData?.votes) {
-              const serverVotes = data.room.gameStateData.votes;
+            const serverState = data.room.gameStateData;
+            
+            // If server already has results (eliminatedPlayer), don't check votes - results are already calculated
+            if (serverState.eliminatedPlayer !== undefined && serverState.eliminatedPlayer !== null) {
+              // Results already exist on server, skip vote checking
+              return;
+            }
+            
+            if (serverState.votes) {
+              const serverVotes = serverState.votes;
               const currentState = game.getState();
               const activePlayers = currentState.players.filter(p => !p.isEliminated);
               const isBothMode = currentState.gameMode === 'mixed';
@@ -718,7 +735,11 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     // Use the game's continueAfterWrongElimination method to properly reset state
     game.continueAfterWrongElimination();
     const newState = game.getState();
-    setGameState(newState);
+    // Reset voting activation so admin needs to activate again for next round
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (game as any).state.votingActivated = false;
+    const updatedState = game.getState();
+    setGameState(updatedState);
     setShowResults(false);
     setEliminatedPlayer(null);
     setSelectedTarget(null);
@@ -734,13 +755,13 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
           body: JSON.stringify({
             roomId,
             gameStateData: {
-              currentPlayerIndex: newState.currentPlayerIndex,
-              votingPhase: newState.votingPhase,
-              votingActivated: newState.votingActivated,
+              currentPlayerIndex: updatedState.currentPlayerIndex,
+              votingPhase: updatedState.votingPhase,
+              votingActivated: false, // Reset activation for next round
               wrongElimination: false,
               eliminatedPlayer: undefined,
               votes: {},
-              playerWords: newState.players.reduce((acc, p) => {
+              playerWords: updatedState.players.reduce((acc, p) => {
                 if (p.currentWord) {
                   acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
                 }
