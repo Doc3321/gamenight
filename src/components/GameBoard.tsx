@@ -330,14 +330,14 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
 
   // Show voting phase if all players have received words - check game state directly
   const currentGameStateForVoting = game.getState();
-  // Check if all players have words (currentPlayerIndex >= players.length means all have spun)
-  const allPlayersHaveWords = currentGameStateForVoting.currentPlayerIndex >= currentGameStateForVoting.players.length;
-  // Also verify all players actually have words assigned (double check)
+  // Check if all players have spun (currentPlayerIndex >= players.length means all have spun)
+  const allPlayersHaveSpun = currentGameStateForVoting.currentPlayerIndex >= currentGameStateForVoting.players.length;
+  // Verify all players actually have words assigned (critical check)
   const allPlayersHaveWordsAssigned = currentGameStateForVoting.players.every(p => p.currentWord !== undefined);
   
-  // Show voting phase if all players have words (regardless of votingPhase flag)
-  // The VotingPhase component will handle showing the activate button if needed
-  if (allPlayersHaveWords && allPlayersHaveWordsAssigned) {
+  // CRITICAL: Only show voting phase if ALL players have spun AND all have words assigned
+  // This ensures the last player has gotten their word before voting starts
+  if (allPlayersHaveSpun && allPlayersHaveWordsAssigned) {
     // For online mode, show voting to current viewing player
     // For local mode, show voting to next player who hasn't voted
     if (gameState.isOnline && viewingPlayerId) {
@@ -543,6 +543,15 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                     }
                     // Additional fallback: Name match (if we found viewingPlayer)
                     else if (viewingPlayer && currentSpinningPlayer.name === viewingPlayer.name) {
+                      isMyTurn = true;
+                    }
+                  }
+                  
+                  // CRITICAL: If viewingPlayer exists but wasn't matched, and it's their index turn, allow it
+                  // This handles edge cases where ID matching fails but it's clearly their turn
+                  if (!isMyTurn && viewingPlayer && currentPlayerIndex < currentGameState.players.length) {
+                    const viewingPlayerIndex = currentGameState.players.findIndex(p => p.id === viewingPlayer.id);
+                    if (viewingPlayerIndex === currentPlayerIndex) {
                       isMyTurn = true;
                     }
                   }
