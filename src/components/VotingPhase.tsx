@@ -647,12 +647,49 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                 }
               }
               
-              // If all voted and results not shown, calculate results
+              // If all voted and results not shown, sync votes to local state and calculate results
               if (allVoted && !showResults && !showTieResults && !showWrongElimination) {
-                // Make sure local state is synced before calculating
-                if (game.allPlayersVoted()) {
-                  handleCalculateResults();
-                }
+                // Sync votes from server to local game state
+                const currentState = game.getState();
+                currentState.players.forEach(p => {
+                  p.votes = 0;
+                  if (!p.isEliminated) {
+                    p.hasVoted = false;
+                    p.votedFor = undefined;
+                    p.votedForImposter = undefined;
+                    p.votedForOtherWord = undefined;
+                  }
+                });
+                
+                Object.entries(serverVotes).forEach(([, voteData]) => {
+                  type VoteData = { voterId: number; targetId: number; voteType?: 'imposter' | 'other-word' };
+                  const vote = voteData as VoteData;
+                  const voter = currentState.players.find(p => p.id === vote.voterId);
+                  if (voter && !voter.isEliminated) {
+                    if (isBothMode && vote.voteType) {
+                      if (vote.voteType === 'imposter') {
+                        voter.votedForImposter = vote.targetId;
+                      } else if (vote.voteType === 'other-word') {
+                        voter.votedForOtherWord = vote.targetId;
+                      }
+                      if (voter.votedForImposter !== undefined && voter.votedForOtherWord !== undefined) {
+                        voter.hasVoted = true;
+                      }
+                    } else if (!vote.voteType) {
+                      voter.votedFor = vote.targetId;
+                      voter.hasVoted = true;
+                    }
+                    
+                    const target = currentState.players.find(p => p.id === vote.targetId);
+                    if (target && !target.isEliminated) {
+                      if (target.votes === undefined) target.votes = 0;
+                      target.votes++;
+                    }
+                  }
+                });
+                
+                // Now calculate results since local state is synced
+                handleCalculateResults();
               }
             }
           }
