@@ -308,8 +308,9 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
     }
   };
 
-  // Show voting phase if all players have received words
-  if (gameState.votingPhase && gameState.currentPlayerIndex >= gameState.players.length) {
+  // Show voting phase if all players have received words - check game state directly
+  const currentGameStateForVoting = game.getState();
+  if (currentGameStateForVoting.votingPhase && currentGameStateForVoting.currentPlayerIndex >= currentGameStateForVoting.players.length) {
     // For online mode, show voting to current viewing player
     // For local mode, show voting to next player who hasn't voted
     if (gameState.isOnline && viewingPlayerId) {
@@ -438,8 +439,16 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="text-center">
-              <p className="text-2xl font-bold">{gameState.currentSpin} / {gameState.totalSpins}</p>
-              <p className="text-muted-foreground">סיבובים</p>
+              {/* Use game state directly to ensure accurate round display */}
+              {(() => {
+                const currentGameState = game.getState();
+                return (
+                  <>
+                    <p className="text-2xl font-bold">{currentGameState.currentSpin} / {currentGameState.totalSpins}</p>
+                    <p className="text-muted-foreground">סיבובים</p>
+                  </>
+                );
+              })()}
             </div>
             
             {getCurrentPlayer() && (
@@ -458,11 +467,17 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                 return null; // Spinning animation is shown separately
               }
               
-              if (gameState.isOnline && viewingPlayerId && gameState.currentPlayerIndex < gameState.players.length) {
-                const currentSpinningPlayer = gameState.players[gameState.currentPlayerIndex];
-                const viewingPlayer = gameState.players.find(p => p.id === viewingPlayerId);
-                const hasMyWord = viewingPlayer?.currentWord !== undefined;
-                const isMyTurn = currentSpinningPlayer && currentSpinningPlayer.id === viewingPlayerId;
+              if (gameState.isOnline && viewingPlayerId) {
+                // Check both component state and game state for currentPlayerIndex
+                const currentGameState = game.getState();
+                const currentPlayerIndex = currentGameState.currentPlayerIndex;
+                const canSpin = currentPlayerIndex < currentGameState.players.length;
+                
+                if (canSpin) {
+                  const currentSpinningPlayer = currentGameState.players[currentPlayerIndex];
+                  const viewingPlayer = currentGameState.players.find(p => p.id === viewingPlayerId);
+                  const hasMyWord = viewingPlayer?.currentWord !== undefined;
+                  const isMyTurn = currentSpinningPlayer && currentSpinningPlayer.id === viewingPlayerId;
                 
                 // If player already has their word, show status message
                 if (hasMyWord && !isMyTurn) {
@@ -499,6 +514,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                       🎯 סובב!
                     </Button>
                   );
+                }
                 }
               } else if (!gameState.isOnline && !showResult && !gameState.selectedWord && gameState.currentPlayerIndex < gameState.players.length) {
                 // Local mode: show spin button
