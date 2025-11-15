@@ -75,6 +75,10 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             }
           });
           
+          // Ensure votingActivated stays true when syncing votes
+          const currentStateForVote = game.getState();
+          const votingActivatedValue = currentStateForVote.votingActivated === true || newState.votingActivated === true;
+          
           await fetch('/api/rooms/game-state', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -83,7 +87,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               gameStateData: {
                 currentPlayerIndex: newState.currentPlayerIndex,
                 votingPhase: newState.votingPhase,
-                votingActivated: newState.votingActivated,
+                votingActivated: votingActivatedValue, // Ensure it stays true
                 votes,
                 playerWords: newState.players.reduce((acc, p) => {
                   if (p.currentWord) {
@@ -373,7 +377,23 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   const handleActivateVoting = async () => {
     game.activateVoting();
     const newState = game.getState();
-    setGameState(newState);
+    
+    // Clear any previous results when activating new voting round
+    setShowResults(false);
+    setShowWrongElimination(false);
+    setShowTieResults(false);
+    setEliminatedPlayer(null);
+    setTiedPlayers([]);
+    
+    // Clear eliminated player state in game if it exists
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((game as any).state.eliminatedPlayer) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (game as any).state.eliminatedPlayer = undefined;
+    }
+    
+    const updatedState = game.getState();
+    setGameState(updatedState);
     
     // Sync voting activation to server for online games
     if (roomId && gameState.isOnline) {
@@ -384,10 +404,14 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
           body: JSON.stringify({
             roomId,
             gameStateData: {
-              currentPlayerIndex: newState.currentPlayerIndex,
-              votingPhase: newState.votingPhase,
-              votingActivated: newState.votingActivated,
-              playerWords: newState.players.reduce((acc, p) => {
+              currentPlayerIndex: updatedState.currentPlayerIndex,
+              votingPhase: updatedState.votingPhase,
+              votingActivated: true, // Explicitly set to true
+              eliminatedPlayer: undefined, // Clear eliminated player
+              wrongElimination: false,
+              isTie: false,
+              votes: {}, // Clear previous votes
+              playerWords: updatedState.players.reduce((acc, p) => {
                 if (p.currentWord) {
                   acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
                 }
@@ -786,8 +810,10 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   const isBothMode = gameState.gameMode === 'mixed';
   const showVoteCounts = gameState.showVoteCounts; // false for online, true for local
 
-  // Admin activation screen (online mode only)
-  if (gameState.isOnline && !gameState.votingActivated && isAdmin) {
+  // Admin activation screen (online mode only) - only show if not showing results
+  const currentGameStateForAdmin = game.getState();
+  const isVotingActivatedForAdmin = currentGameStateForAdmin.votingActivated === true || gameState.votingActivated === true;
+  if (gameState.isOnline && !isVotingActivatedForAdmin && isAdmin && !showResults && !showWrongElimination && !showTieResults) {
     return (
       <div className="max-w-2xl mx-auto relative">
         <ClassifiedStamp level="TOP SECRET" />
@@ -831,9 +857,10 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   }
 
   // Waiting for admin to activate (online mode) - check both component state and game state
+  // Only show if not showing results
   const currentGameState = game.getState();
   const isVotingActivated = currentGameState.votingActivated === true || gameState.votingActivated === true;
-  if (gameState.isOnline && !isVotingActivated && !isAdmin) {
+  if (gameState.isOnline && !isVotingActivated && !isAdmin && !showResults && !showWrongElimination && !showTieResults) {
     return (
       <div className="max-w-2xl mx-auto relative">
         <ClassifiedStamp level="SECRET" />
