@@ -42,6 +42,13 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     
     if (!target) return;
     
+    // Prevent voting if not activated (for online mode) - check both states
+    if (gameState.isOnline) {
+      const currentState = game.getState();
+      const isActivated = currentState.votingActivated === true || gameState.votingActivated === true;
+      if (!isActivated) return;
+    }
+    
     const success = game.castVote(currentPlayerId, target, voteType);
     if (success) {
       const newState = game.getState();
@@ -398,15 +405,18 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             const serverState = data.room.gameStateData;
             let stateChanged = false;
             
-            // Sync voting activation
-            if (serverState.votingActivated !== undefined && serverState.votingActivated !== gameState.votingActivated) {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              (game as any).state.votingActivated = serverState.votingActivated;
-              if (serverState.votingActivated && !gameState.votingPhase) {
+            // Sync voting activation - always sync when server has a value
+            if (serverState.votingActivated !== undefined) {
+              const currentActivated = (game as any).state.votingActivated;
+              if (serverState.votingActivated !== currentActivated) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (game as any).state.votingPhase = true;
+                (game as any).state.votingActivated = serverState.votingActivated;
+                if (serverState.votingActivated && !gameState.votingPhase) {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (game as any).state.votingPhase = true;
+                }
+                stateChanged = true;
               }
-              stateChanged = true;
             }
             
             // Sync votes from server
@@ -797,8 +807,10 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     );
   }
 
-  // Waiting for admin to activate (online mode)
-  if (gameState.isOnline && !gameState.votingActivated && !isAdmin) {
+  // Waiting for admin to activate (online mode) - check both component state and game state
+  const currentGameState = game.getState();
+  const isVotingActivated = currentGameState.votingActivated === true || gameState.votingActivated === true;
+  if (gameState.isOnline && !isVotingActivated && !isAdmin) {
     return (
       <div className="max-w-2xl mx-auto relative">
         <ClassifiedStamp level="SECRET" />
@@ -969,8 +981,10 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   // Show all active players (excluding current player)
   const playersToShow = activePlayers.filter(p => p.id !== currentPlayerId);
   
-  // Can vote if not voted yet
-  const canVote = !hasVoted;
+  // Can vote if not voted yet and voting is activated (for online mode) - check both states
+  const currentGameStateForVote = game.getState();
+  const isVotingActivatedForVote = currentGameStateForVote.votingActivated === true || gameState.votingActivated === true;
+  const canVote = !hasVoted && (!gameState.isOnline || isVotingActivatedForVote);
 
   // Check voting progress for both mode
   const hasVotedImposter = currentPlayer?.votedForImposter !== undefined;
@@ -1047,7 +1061,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
           </div>
 
           {/* Voting Section - Both Mode */}
-          {isBothMode && !bothVotesComplete && (
+          {isBothMode && !bothVotesComplete && canVote && (
             <>
               {playersToShow.length > 0 ? (
                 <div className="space-y-6">

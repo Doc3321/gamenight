@@ -208,6 +208,9 @@ export class WordGame {
     if (voter.isEliminated || target.isEliminated) return false;
     if (voterId === targetId) return false; // Can't vote for yourself
     
+    // For online mode, voting must be activated
+    if (this.state.isOnline && !this.state.votingActivated) return false;
+    
     // For both mode, check if already voted for this person in this type
     if (this.state.gameMode === 'mixed' && voteType) {
       if (voteType === 'imposter' && voter.votedForImposter === targetId) return false;
