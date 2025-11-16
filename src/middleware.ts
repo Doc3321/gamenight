@@ -1,13 +1,12 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
 const isPublicRoute = createRouteMatcher([
-  '/',
   '/api/webhooks(.*)',
 ]);
 
 // Only apply middleware if Clerk is configured
 const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-const hasClerk = clerkKey && clerkKey !== 'pk_test_placeholder';
+const hasClerk = clerkKey && clerkKey.startsWith('pk_');
 
 export default hasClerk
   ? clerkMiddleware(async (auth, req) => {
