@@ -505,7 +505,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
     }
     
     // In online mode, if there's an eliminated player, show VotingPhase which will handle the elimination screen
-    if (gameState.eliminatedPlayer && gameState.isOnline) {
+    if (gameState.eliminatedPlayer && gameState.isOnline && viewingPlayerId !== undefined) {
       const viewingPlayer = currentGameStateForVoting.players.find(p => p.id === viewingPlayerId);
       if (viewingPlayer && !viewingPlayer.isEliminated) {
         return (
