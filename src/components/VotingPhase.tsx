@@ -552,34 +552,51 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             let stateChanged = false;
             
             // Sync voting activation - always sync when server has a value
-            // BUT: Don't reset to false if we're in the middle of voting (to prevent going back to activation screen)
+            // When server says true, always sync (new voting round started)
+            // When server says false, only sync if we don't have active votes (to prevent resetting mid-vote)
             if (serverState.votingActivated !== undefined) {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const currentActivated = (game as any).state.votingActivated;
-              const currentState = game.getState();
-              const hasActiveVotes = currentState.players.some(p => 
-                !p.isEliminated && (p.hasVoted || p.votedForImposter !== undefined || p.votedForOtherWord !== undefined)
-              );
               
-              // Only sync if server says true, OR if server says false AND we don't have any active votes
-              // This prevents resetting votingActivated to false while players are still voting
-              if (serverState.votingActivated === true || (serverState.votingActivated === false && !hasActiveVotes)) {
+              // If server says true, always sync (admin activated voting)
+              if (serverState.votingActivated === true) {
                 if (serverState.votingActivated !== currentActivated) {
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  (game as any).state.votingActivated = serverState.votingActivated;
-                  if (serverState.votingActivated && !gameState.votingPhase) {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    (game as any).state.votingPhase = true;
-                  }
+                  (game as any).state.votingActivated = true;
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (game as any).state.votingPhase = true;
+                  
+                  // Reset all players' voting state when voting is activated (new round)
+                  const currentState = game.getState();
+                  currentState.players.forEach(p => {
+                    if (!p.isEliminated) {
+                      p.hasVoted = false;
+                      p.votedFor = undefined;
+                      p.votedForImposter = undefined;
+                      p.votedForOtherWord = undefined;
+                      p.votes = 0;
+                    }
+                  });
+                  
                   stateChanged = true;
                   // Force immediate state update when voting is activated so players can vote
-                  if (serverState.votingActivated) {
-                    const updatedState = game.getState();
-                    setGameState({ 
-                      ...updatedState,
-                      players: updatedState.players.map(p => ({ ...p }))
-                    });
-                  }
+                  const updatedState = game.getState();
+                  setGameState({ 
+                    ...updatedState,
+                    players: updatedState.players.map(p => ({ ...p }))
+                  });
+                }
+              } else if (serverState.votingActivated === false) {
+                // Only sync false if we don't have active votes (prevent resetting mid-vote)
+                const currentState = game.getState();
+                const hasActiveVotes = currentState.players.some(p => 
+                  !p.isEliminated && (p.hasVoted || p.votedForImposter !== undefined || p.votedForOtherWord !== undefined)
+                );
+                
+                if (!hasActiveVotes && serverState.votingActivated !== currentActivated) {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (game as any).state.votingActivated = false;
+                  stateChanged = true;
                 }
               }
             }
@@ -1185,7 +1202,10 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   // Waiting for admin to activate (online mode) - check both component state and game state
   // Only show if voting is NOT activated yet AND not showing results AND no eliminated player AND definitely not admin
   // Use the already-fetched currentGameStateForRender to avoid multiple getState() calls
-  const isVotingActivated = currentGameStateForRender.votingActivated === true || gameState.votingActivated === true;
+  // Also check the game's internal state directly to ensure we have the latest value
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const gameInternalVotingActivated = (game as any).state.votingActivated === true;
+  const isVotingActivated = gameInternalVotingActivated || currentGameStateForRender.votingActivated === true || gameState.votingActivated === true;
   const shouldShowWaitingForActivation = gameState.isOnline && !isVotingActivated && isAdmin === false && !showResults && !showWrongElimination && !showTieResults && !hasEliminatedPlayer && !hasEliminatedPlayerInState;
   if (shouldShowWaitingForActivation) {
     return (
@@ -1229,7 +1249,10 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   
   // Can vote if: not voted yet, voting is activated (for online mode), AND it's my turn (for online mode)
   // Use the already-fetched currentGameStateForRender to avoid multiple getState() calls
-  const isVotingActivatedForVote = currentGameStateForRender.votingActivated === true || gameState.votingActivated === true;
+  // Also check the game's internal state directly to ensure we have the latest value
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const gameInternalVotingActivatedForVote = (game as any).state.votingActivated === true;
+  const isVotingActivatedForVote = gameInternalVotingActivatedForVote || currentGameStateForRender.votingActivated === true || gameState.votingActivated === true;
   const canVote = !hasVoted && (!gameState.isOnline || (isVotingActivatedForVote && isMyTurnToVote));
   
   // Show waiting screen if it's not my turn to vote (online mode only)
