@@ -580,10 +580,19 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                 // This includes the last player (when index is players.length - 1)
                 const canSpin = currentPlayerIndex < currentGameState.players.length;
                 
+                console.log('[GameBoard] Spin button check:', {
+                  currentPlayerIndex,
+                  playersLength: currentGameState.players.length,
+                  canSpin,
+                  viewingPlayerId,
+                  isLastPlayer: currentPlayerIndex === currentGameState.players.length - 1
+                });
+                
                 if (canSpin) {
                   const currentSpinningPlayer = currentGameState.players[currentPlayerIndex];
                   
                   if (!currentSpinningPlayer) {
+                    console.log('[GameBoard] No current spinning player at index:', currentPlayerIndex);
                     return null;
                   }
                   
@@ -700,7 +709,39 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                                         viewingPlayerId === currentGameState.players.length &&
                                         !hasMyWord;
                 
-                if ((isMyTurn || isMyTurnByIndex || isMyTurnById || isLastPlayerTurn) && !hasMyWord && !showResult) {
+                // Also check: if currentPlayerIndex is the last player's index, and viewingPlayer is the last player
+                const isLastPlayerByIndex = currentPlayerIndex === currentGameState.players.length - 1 &&
+                                           viewingPlayerIndex === currentGameState.players.length - 1 &&
+                                           !hasMyWord;
+                
+                // CRITICAL: If it's the last player's turn (currentPlayerIndex === players.length - 1)
+                // and the viewing player is the last player, allow them to spin
+                const isLastPlayerTurnSimple = currentPlayerIndex === currentGameState.players.length - 1 &&
+                                              viewingPlayer &&
+                                              viewingPlayerIndex === currentGameState.players.length - 1 &&
+                                              !hasMyWord;
+                
+                // Fallback: If currentPlayerIndex is last player's index and viewingPlayerId suggests it's the last player
+                const isLastPlayerFallback = currentPlayerIndex === currentGameState.players.length - 1 &&
+                                            (viewingPlayerId === currentGameState.players.length || 
+                                             (viewingPlayerId !== undefined && viewingPlayerId > 0 && viewingPlayerId - 1 === currentGameState.players.length - 1)) &&
+                                            !hasMyWord;
+                
+                console.log('[GameBoard] Turn check results:', {
+                  isMyTurn,
+                  isMyTurnByIndex,
+                  isMyTurnById,
+                  isLastPlayerTurn,
+                  isLastPlayerByIndex,
+                  hasMyWord,
+                  showResult,
+                  currentPlayerIndex,
+                  viewingPlayerIndex,
+                  viewingPlayerId,
+                  currentSpinningPlayerId: currentSpinningPlayer?.id
+                });
+                
+                if ((isMyTurn || isMyTurnByIndex || isMyTurnById || isLastPlayerTurn || isLastPlayerByIndex || isLastPlayerTurnSimple || isLastPlayerFallback) && !hasMyWord && !showResult) {
                   return (
                     <Button 
                       onClick={handleSpin} 
