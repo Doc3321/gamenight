@@ -334,6 +334,23 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       votedForOtherWord: p.votedForOtherWord
     })));
     
+    // CRITICAL: Double-check vote counts by summing them
+    const totalVotesCounted = stateBeforeCalc.players.reduce((sum, p) => sum + (p.votes || 0), 0);
+    const activePlayersCount = stateBeforeCalc.players.filter(p => !p.isEliminated).length;
+    const expectedVotes = stateBeforeCalc.gameMode === 'mixed' ? activePlayersCount * 2 : activePlayersCount;
+    console.log('[VotingPhase] Vote count verification:', {
+      totalVotesCounted,
+      expectedVotes,
+      activePlayersCount,
+      gameMode: stateBeforeCalc.gameMode,
+      match: totalVotesCounted === expectedVotes
+    });
+    
+    // If vote counts don't match expected, log warning
+    if (totalVotesCounted !== expectedVotes) {
+      console.warn('[VotingPhase] WARNING: Vote counts do not match expected! This may cause incorrect results.');
+    }
+    
     // Now calculate results with accurate vote counts
     const result = game.calculateVotingResult();
     const newState = game.getState();
@@ -1229,33 +1246,39 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                   }
                 });
                 
-                // Now recalculate vote counts from voting data
-                currentState.players.forEach(voter => {
-                  if (!voter.isEliminated) {
-                    if (isBothMode) {
-                      if (voter.votedForImposter !== undefined) {
-                        const target = currentState.players.find(p => p.id === voter.votedForImposter);
-                        if (target && !target.isEliminated) {
-                          if (target.votes === undefined) target.votes = 0;
-                          target.votes++;
-                        }
-                      }
-                      if (voter.votedForOtherWord !== undefined) {
-                        const target = currentState.players.find(p => p.id === voter.votedForOtherWord);
-                        if (target && !target.isEliminated) {
-                          if (target.votes === undefined) target.votes = 0;
-                          target.votes++;
-                        }
-                      }
-                    } else if (voter.votedFor !== undefined) {
-                      const target = currentState.players.find(p => p.id === voter.votedFor);
-                      if (target && !target.isEliminated) {
-                        if (target.votes === undefined) target.votes = 0;
-                        target.votes++;
-                      }
-                    }
+                // Now recalculate vote counts from voting data - CRITICAL for accuracy
+                // Reset all vote counts first to ensure clean calculation
+                currentState.players.forEach(p => {
+                  p.votes = 0;
+                });
+                
+                // Count votes from server votes object directly for accuracy
+                // In normal mode: each vote entry = 1 vote for target
+                // In mixed mode: each vote entry = 1 vote for target (imposter and other-word are separate votes)
+                const voteCounts: Record<number, number> = {};
+                Object.entries(serverVotes).forEach(([, voteData]) => {
+                  type VoteData = { voterId: number; targetId: number; voteType?: 'imposter' | 'other-word' };
+                  const vote = voteData as VoteData;
+                  // Count every vote entry - each entry represents one vote for the target
+                  if (!voteCounts[vote.targetId]) {
+                    voteCounts[vote.targetId] = 0;
+                  }
+                  voteCounts[vote.targetId]++;
+                });
+                
+                // Apply vote counts to players
+                Object.entries(voteCounts).forEach(([targetIdStr, count]) => {
+                  const targetId = parseInt(targetIdStr, 10);
+                  const target = currentState.players.find(p => p.id === targetId);
+                  if (target && !target.isEliminated) {
+                    target.votes = count;
                   }
                 });
+                
+                console.log('[VotingPhase] Vote counts calculated from server votes:', Object.entries(voteCounts).map(([id, count]) => ({
+                  targetId: id,
+                  votes: count
+                })));
                 
                 // Now calculate results since local state is synced
                 console.log('[VotingPhase] All players voted, calculating results');
