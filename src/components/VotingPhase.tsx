@@ -397,25 +397,13 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
 
   const handleRevote = async () => {
     game.revote();
-    // Reset voting activation so admin needs to activate again
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (game as any).state.votingActivated = false;
     // Reset currentVotingPlayerIndex to 0 for new voting round
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (game as any).state.currentVotingPlayerIndex = 0;
     // Clear all result states
     const updatedState = game.getState();
-    setGameState(updatedState);
-    setShowTieResults(false);
-    setShowResults(false);
-    setShowWrongElimination(false);
-    setTiedPlayers([]);
-    setEliminatedPlayer(null);
-    setSelectedTarget(null);
-    setSelectedImposterTarget(null);
-    setSelectedOtherWordTarget(null);
     
-    // Reset all players' voting state
+    // Reset all players' voting state FIRST
     updatedState.players.forEach(p => {
       if (!p.isEliminated) {
         p.hasVoted = false;
@@ -426,24 +414,47 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       }
     });
     
-    // Sync revote to server
+    // Clear eliminated player state
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (game as any).state.eliminatedPlayer = undefined;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (game as any).state.wrongElimination = false;
+    
+    // Reset voting activation so admin needs to activate again
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (game as any).state.votingActivated = false;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (game as any).state.votingPhase = false;
+    
+    setGameState(updatedState);
+    setShowTieResults(false);
+    setShowResults(false);
+    setShowWrongElimination(false);
+    setTiedPlayers([]);
+    setEliminatedPlayer(null);
+    setSelectedTarget(null);
+    setSelectedImposterTarget(null);
+    setSelectedOtherWordTarget(null);
+    
+    // Sync revote to server - clear everything
     if (roomId && gameState.isOnline) {
       try {
+        const finalState = game.getState();
         await fetch('/api/rooms/game-state', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             roomId,
             gameStateData: {
-              currentPlayerIndex: updatedState.currentPlayerIndex,
+              currentPlayerIndex: finalState.currentPlayerIndex,
               votingPhase: false, // Reset voting phase
               currentVotingPlayerIndex: 0, // Reset to first player
-              votingActivated: false, // Reset activation
+              votingActivated: false, // Reset activation - admin must activate again
               isTie: false,
               wrongElimination: false,
               eliminatedPlayer: undefined,
               votes: {}, // Clear all votes
-              playerWords: updatedState.players.reduce((acc, p) => {
+              playerWords: finalState.players.reduce((acc, p) => {
                 if (p.currentWord) {
                   acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
                 }
@@ -452,7 +463,14 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             }
           })
         });
-        console.log('[VotingPhase] Revote synced to server');
+        console.log('[VotingPhase] Revote synced to server - voting reset, admin must activate again');
+        
+        // Force state update after sync
+        const refreshedState = game.getState();
+        setGameState({
+          ...refreshedState,
+          players: refreshedState.players.map(p => ({ ...p }))
+        });
       } catch (error) {
         console.error('Error syncing revote:', error);
       }
@@ -729,11 +747,13 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               
               // If votes object is empty (revote), reset everything and hide tie screen
               if (Object.keys(serverState.votes).length === 0) {
+                console.log('[VotingPhase] Empty votes detected - revote was triggered, resetting all voting state');
                 // Hide tie screen if it's showing (revote was triggered)
                 if (showTieResults) {
                   setShowTieResults(false);
                   setTiedPlayers([]);
                 }
+                // Reset all players' voting state
                 currentState.players.forEach(p => {
                   p.votes = 0;
                   if (!p.isEliminated) {
@@ -743,9 +763,32 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                     p.votedForOtherWord = undefined;
                   }
                 });
+                // Also clear any eliminated player state if it exists
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (game as any).state.eliminatedPlayer = undefined;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (game as any).state.wrongElimination = false;
+                // Reset voting activation and phase if server says so
+                if (serverState.votingActivated === false) {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (game as any).state.votingActivated = false;
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (game as any).state.votingPhase = false;
+                  // Reset currentVotingPlayerIndex
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (game as any).state.currentVotingPlayerIndex = 0;
+                }
                 stateChanged = true;
+                // Force state update
+                const refreshedState = game.getState();
+                setGameState({
+                  ...refreshedState,
+                  players: refreshedState.players.map(p => ({ ...p })),
+                  votingActivated: serverState.votingActivated === false ? false : refreshedState.votingActivated,
+                  votingPhase: serverState.votingPhase === false ? false : refreshedState.votingPhase
+                });
               } else {
-                // Reset vote counts first (but preserve voting status - we'll update it from server)
+                // CRITICAL: Reset ALL vote counts first to ensure accurate recalculation
                 currentState.players.forEach(p => {
                   p.votes = 0;
                 });
@@ -777,6 +820,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                 });
                 
                 // Apply votes from server and recalculate vote counts
+                // IMPORTANT: We reset vote counts above, so now we recalculate from scratch
                 Object.entries(serverState.votes).forEach(([, voteData]) => {
                   type VoteData = { voterId: number; targetId: number; voteType?: 'imposter' | 'other-word' };
                   const vote = voteData as VoteData;
@@ -808,6 +852,12 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                     stateChanged = true;
                   }
                 });
+                
+                console.log('[VotingPhase] Vote counts after sync from server:', currentState.players.map(p => ({
+                  name: p.name,
+                  votes: p.votes,
+                  isEliminated: p.isEliminated
+                })));
               }
             }
             
@@ -1048,14 +1098,61 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                 
                 // Now calculate results since local state is synced
                 console.log('[VotingPhase] All players voted, calculating results');
+                console.log('[VotingPhase] Vote counts before calculation:', currentState.players.map(p => ({
+                  name: p.name,
+                  votes: p.votes,
+                  isEliminated: p.isEliminated
+                })));
+                
                 // Force state update before calculating results
                 const updatedState = game.getState();
                 setGameState({
                   ...updatedState,
                   players: updatedState.players.map(p => ({ ...p }))
                 });
+                
                 // Calculate results after state is updated
                 setTimeout(() => {
+                  // Recalculate vote counts from votes to ensure accuracy
+                  const stateBeforeCalc = game.getState();
+                  stateBeforeCalc.players.forEach(p => {
+                    p.votes = 0;
+                  });
+                  
+                  // Recalculate votes from player voting data
+                  stateBeforeCalc.players.forEach(voter => {
+                    if (!voter.isEliminated) {
+                      if (stateBeforeCalc.gameMode === 'mixed') {
+                        if (voter.votedForImposter !== undefined) {
+                          const target = stateBeforeCalc.players.find(p => p.id === voter.votedForImposter);
+                          if (target && !target.isEliminated) {
+                            if (target.votes === undefined) target.votes = 0;
+                            target.votes++;
+                          }
+                        }
+                        if (voter.votedForOtherWord !== undefined) {
+                          const target = stateBeforeCalc.players.find(p => p.id === voter.votedForOtherWord);
+                          if (target && !target.isEliminated) {
+                            if (target.votes === undefined) target.votes = 0;
+                            target.votes++;
+                          }
+                        }
+                      } else if (voter.votedFor !== undefined) {
+                        const target = stateBeforeCalc.players.find(p => p.id === voter.votedFor);
+                        if (target && !target.isEliminated) {
+                          if (target.votes === undefined) target.votes = 0;
+                          target.votes++;
+                        }
+                      }
+                    }
+                  });
+                  
+                  console.log('[VotingPhase] Vote counts after recalculation:', stateBeforeCalc.players.map(p => ({
+                    name: p.name,
+                    votes: p.votes,
+                    isEliminated: p.isEliminated
+                  })));
+                  
                   handleCalculateResults();
                 }, 100);
               }

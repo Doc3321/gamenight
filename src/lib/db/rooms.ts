@@ -277,77 +277,115 @@ export async function joinRoom(
 }
 
 export async function leaveRoom(userId: string): Promise<GameRoom | null> {
-  // Find which room the user is in
-  const { data: playerData } = await supabaseAdmin
-    .from('room_players')
-    .select('room_id')
-    .eq('user_id', userId)
-    .single();
+  try {
+    // Find which room the user is in
+    const { data: playerData, error: playerDataError } = await supabaseAdmin
+      .from('room_players')
+      .select('room_id')
+      .eq('user_id', userId)
+      .single();
 
-  if (!playerData) {
-    return null;
-  }
-
-  const roomId = playerData.room_id;
-  const room = await getRoom(roomId);
-  if (!room) {
-    return null;
-  }
-
-  // Get player info before removing
-  const player = room.players.find(p => p.id === userId);
-  if (!player) {
-    return null;
-  }
-
-  const isHost = player.isHost;
-  const wasOnlyPlayer = room.players.length === 1;
-
-  // If host was the only player, delete room immediately before removing player
-  if (isHost && wasOnlyPlayer) {
-    console.log('[DB] Host was only player, deleting room:', roomId);
-    await supabaseAdmin.from('rooms').delete().eq('id', roomId);
-    await supabaseAdmin.from('room_players').delete().eq('room_id', roomId);
-    await supabaseAdmin.from('game_states').delete().eq('room_id', roomId);
-    return null;
-  }
-
-  // Remove player
-  await supabaseAdmin
-    .from('room_players')
-    .delete()
-    .eq('room_id', roomId)
-    .eq('user_id', userId);
-
-  // If host left and there are other players, assign new host
-  if (isHost && room.players.length > 1) {
-    const remainingPlayers = room.players.filter(p => p.id !== userId);
-    if (remainingPlayers.length > 0) {
-      await supabaseAdmin
-        .from('rooms')
-        .update({ host_id: remainingPlayers[0].id })
-        .eq('id', roomId);
-
-      await supabaseAdmin
-        .from('room_players')
-        .update({ is_host: true })
-        .eq('room_id', roomId)
-        .eq('user_id', remainingPlayers[0].id);
+    if (playerDataError || !playerData) {
+      // User not in any room - this is fine, just return null
+      return null;
     }
-  }
 
-  // Check if room is now empty after removing player
-  const updatedRoom = await getRoom(roomId);
-  if (updatedRoom && updatedRoom.players.length === 0) {
-    // No players left - delete room
-    console.log('[DB] Deleting empty room:', roomId);
-    await supabaseAdmin.from('rooms').delete().eq('id', roomId);
-    await supabaseAdmin.from('room_players').delete().eq('room_id', roomId);
-    await supabaseAdmin.from('game_states').delete().eq('room_id', roomId);
+    const roomId = playerData.room_id;
+    const room = await getRoom(roomId);
+    if (!room) {
+      return null;
+    }
+
+    // Get player info before removing
+    const player = room.players.find(p => p.id === userId);
+    if (!player) {
+      return null;
+    }
+
+    const isHost = player.isHost;
+    const wasOnlyPlayer = room.players.length === 1;
+
+    // If host was the only player, delete room immediately before removing player
+    if (isHost && wasOnlyPlayer) {
+      console.log('[DB] Host was only player, deleting room:', roomId);
+      const { error: roomDeleteError } = await supabaseAdmin.from('rooms').delete().eq('id', roomId);
+      if (roomDeleteError) {
+        console.error('[DB] Error deleting room:', roomDeleteError);
+      }
+      const { error: playersDeleteError } = await supabaseAdmin.from('room_players').delete().eq('room_id', roomId);
+      if (playersDeleteError) {
+        console.error('[DB] Error deleting room players:', playersDeleteError);
+      }
+      const { error: gameStateDeleteError } = await supabaseAdmin.from('game_states').delete().eq('room_id', roomId);
+      if (gameStateDeleteError) {
+        console.error('[DB] Error deleting game state:', gameStateDeleteError);
+      }
+      return null;
+    }
+
+    // Remove player
+    const { error: removeError } = await supabaseAdmin
+      .from('room_players')
+      .delete()
+      .eq('room_id', roomId)
+      .eq('user_id', userId);
+
+    if (removeError) {
+      console.error('[DB] Error removing player:', removeError);
+      throw new Error(`Failed to remove player: ${removeError.message}`);
+    }
+
+    // If host left and there are other players, assign new host
+    if (isHost && room.players.length > 1) {
+      const remainingPlayers = room.players.filter(p => p.id !== userId);
+      if (remainingPlayers.length > 0) {
+        const { error: updateHostError } = await supabaseAdmin
+          .from('rooms')
+          .update({ host_id: remainingPlayers[0].id })
+          .eq('id', roomId);
+        
+        if (updateHostError) {
+          console.error('[DB] Error updating host:', updateHostError);
+        }
+
+        const { error: updatePlayerHostError } = await supabaseAdmin
+          .from('room_players')
+          .update({ is_host: true })
+          .eq('room_id', roomId)
+          .eq('user_id', remainingPlayers[0].id);
+        
+        if (updatePlayerHostError) {
+          console.error('[DB] Error updating player host status:', updatePlayerHostError);
+        }
+      }
+    }
+
+    // Check if room is now empty after removing player
+    const updatedRoom = await getRoom(roomId);
+    if (updatedRoom && updatedRoom.players.length === 0) {
+      // No players left - delete room
+      console.log('[DB] Deleting empty room:', roomId);
+      const { error: roomDeleteError } = await supabaseAdmin.from('rooms').delete().eq('id', roomId);
+      if (roomDeleteError) {
+        console.error('[DB] Error deleting empty room:', roomDeleteError);
+      }
+      const { error: playersDeleteError } = await supabaseAdmin.from('room_players').delete().eq('room_id', roomId);
+      if (playersDeleteError) {
+        console.error('[DB] Error deleting empty room players:', playersDeleteError);
+      }
+      const { error: gameStateDeleteError } = await supabaseAdmin.from('game_states').delete().eq('room_id', roomId);
+      if (gameStateDeleteError) {
+        console.error('[DB] Error deleting empty room game state:', gameStateDeleteError);
+      }
+      return null;
+    }
+
+    return updatedRoom;
+  } catch (error) {
+    console.error('[DB] Error in leaveRoom:', error);
+    // Don't throw - return null to gracefully handle errors
     return null;
   }
-
-  return updatedRoom;
 }
 
 export async function updatePlayerReady(
@@ -476,7 +514,7 @@ export async function updateGameState(
 ): Promise<void> {
   const normalizedRoomId = roomId.toUpperCase().trim();
 
-  await supabaseAdmin
+  const { error } = await supabaseAdmin
     .from('game_states')
     .upsert({
       room_id: normalizedRoomId,
@@ -495,6 +533,17 @@ export async function updateGameState(
     }, {
       onConflict: 'room_id',
     });
+
+  if (error) {
+    console.error('[DB] Error updating game state:', {
+      roomId: normalizedRoomId,
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
+    throw new Error(`Failed to update game state: ${error.message} (Code: ${error.code})`);
+  }
 }
 
 export async function addEmote(

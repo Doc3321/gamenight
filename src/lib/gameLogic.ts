@@ -288,15 +288,25 @@ export class WordGame {
   public calculateVotingResult(): { eliminated: Player | null; isTie: boolean; tiedPlayers: Player[]; wasWrong: boolean } {
     const results = this.getVotingResults();
     
+    console.log('[GameLogic] calculateVotingResult - results:', results.map(r => ({
+      name: r.player.name,
+      votes: r.votes,
+      isEliminated: r.player.isEliminated
+    })));
+    
     if (results.length === 0) {
+      console.log('[GameLogic] No voting results, returning no elimination');
       return { eliminated: null, isTie: false, tiedPlayers: [], wasWrong: false };
     }
 
     const maxVotes = results[0].votes;
     const tiedPlayers = results.filter(r => r.votes === maxVotes).map(r => r.player);
 
+    console.log('[GameLogic] Max votes:', maxVotes, 'Tied players count:', tiedPlayers.length, 'Tied players:', tiedPlayers.map(p => p.name));
+
     if (tiedPlayers.length > 1) {
       // There's a tie
+      console.log('[GameLogic] TIE DETECTED - multiple players with', maxVotes, 'votes');
       this.state.canRevote = true;
       return {
         eliminated: null,
@@ -308,6 +318,7 @@ export class WordGame {
 
     // Single winner (most votes = eliminated)
     const eliminated = tiedPlayers[0];
+    console.log('[GameLogic] SINGLE ELIMINATION -', eliminated.name, 'with', maxVotes, 'votes');
     eliminated.isEliminated = true;
     this.state.eliminatedPlayer = eliminated;
     
