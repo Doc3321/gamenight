@@ -1129,10 +1129,12 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             const serverState = data.room?.gameStateData;
             
             // If server has eliminated player, sync it immediately
+            // CRITICAL: Sync to ALL players, including the eliminated player themselves
             if (serverState?.eliminatedPlayer !== undefined && serverState.eliminatedPlayer !== null) {
               const currentState = game.getState();
               const eliminated = currentState.players.find(p => p.id === serverState.eliminatedPlayer.id);
-              if (eliminated && !eliminated.isEliminated) {
+              if (eliminated) {
+                // Always sync eliminated state, even if already set
                 eliminated.isEliminated = true;
                 eliminated.votes = serverState.eliminatedPlayer.votes || 0;
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -283,9 +283,11 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                 (game as any).state.wrongElimination = false;
                 stateChanged = true;
               } else {
-                // Set eliminated player
+                // Set eliminated player - ALWAYS sync, even if already set
+                // IMPORTANT: Sync to ALL players, including the eliminated player themselves
                 const eliminated = currentState.players.find(p => p.id === serverState.eliminatedPlayer.id);
                 if (eliminated) {
+                  // Always update eliminated state, even if already eliminated
                   eliminated.isEliminated = true;
                   eliminated.votes = serverState.eliminatedPlayer.votes || 0;
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -299,7 +301,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                     (game as any).state.wrongElimination = serverState.wrongElimination;
                   }
                   stateChanged = true;
-                  console.log('[GameBoard] Synced eliminated player from server:', eliminated.name, 'votes:', eliminated.votes);
+                  console.log('[GameBoard] Synced eliminated player from server:', eliminated.name, 'votes:', eliminated.votes, 'viewingPlayerId:', viewingPlayerId);
                 }
               }
             }
@@ -394,9 +396,11 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
   // This ensures the last player has gotten their word before voting starts
   // CRITICAL: Check for eliminated player FIRST - if there's an eliminated player, show results screen
   // This prevents showing "Start Voting" screen when results are already available
+  // IMPORTANT: Show results to ALL players, including the eliminated player
   if (currentGameStateForVoting.eliminatedPlayer && gameState.isOnline && viewingPlayerId !== undefined) {
     const viewingPlayer = currentGameStateForVoting.players.find(p => p.id === viewingPlayerId);
-    if (viewingPlayer && !viewingPlayer.isEliminated) {
+    // Show results to all players, including the eliminated player
+    if (viewingPlayer) {
       return (
         <VotingPhase
           game={game}
@@ -539,9 +543,11 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
     }
     
     // In online mode, if there's an eliminated player, show VotingPhase which will handle the elimination screen
+    // IMPORTANT: Show results to ALL players, including the eliminated player
     if (gameState.eliminatedPlayer && gameState.isOnline && viewingPlayerId !== undefined) {
       const viewingPlayer = currentGameStateForVoting.players.find(p => p.id === viewingPlayerId);
-      if (viewingPlayer && !viewingPlayer.isEliminated) {
+      // Show results to all players, including the eliminated player
+      if (viewingPlayer) {
         return (
           <VotingPhase
             game={game}
