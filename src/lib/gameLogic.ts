@@ -300,11 +300,16 @@ export class WordGame {
     }
 
     const maxVotes = results[0].votes;
-    const tiedPlayers = results.filter(r => r.votes === maxVotes).map(r => r.player);
+    
+    // CRITICAL: Only consider players with votes > 0 for tie detection
+    // Players with 0 votes shouldn't be considered in a tie
+    const playersWithVotes = results.filter(r => r.votes > 0);
+    const tiedPlayers = playersWithVotes.filter(r => r.votes === maxVotes).map(r => r.player);
 
-    console.log('[GameLogic] Max votes:', maxVotes, 'Tied players count:', tiedPlayers.length, 'Tied players:', tiedPlayers.map(p => p.name));
+    console.log('[GameLogic] Max votes:', maxVotes, 'Players with votes:', playersWithVotes.length, 'Tied players count:', tiedPlayers.length, 'Tied players:', tiedPlayers.map(p => p.name));
 
-    if (tiedPlayers.length > 1) {
+    // Only consider it a tie if maxVotes > 0 AND multiple players have that max
+    if (maxVotes > 0 && tiedPlayers.length > 1) {
       // There's a tie
       console.log('[GameLogic] TIE DETECTED - multiple players with', maxVotes, 'votes');
       this.state.canRevote = true;
@@ -314,6 +319,12 @@ export class WordGame {
         tiedPlayers,
         wasWrong: false
       };
+    }
+    
+    // If maxVotes is 0, no one got votes (shouldn't happen, but handle it)
+    if (maxVotes === 0) {
+      console.log('[GameLogic] No votes cast, returning no elimination');
+      return { eliminated: null, isTie: false, tiedPlayers: [], wasWrong: false };
     }
 
     // Single winner (most votes = eliminated)

@@ -273,7 +273,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
               stateChanged = true;
             }
             
-            // Sync eliminated player state
+            // Sync eliminated player state - CRITICAL for showing correct screen
             if (serverState.eliminatedPlayer !== undefined) {
               if (serverState.eliminatedPlayer === null || serverState.eliminatedPlayer === undefined) {
                 // Clear eliminated player
@@ -285,17 +285,33 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
               } else {
                 // Set eliminated player
                 const eliminated = currentState.players.find(p => p.id === serverState.eliminatedPlayer.id);
-                if (eliminated && !eliminated.isEliminated) {
+                if (eliminated) {
                   eliminated.isEliminated = true;
                   eliminated.votes = serverState.eliminatedPlayer.votes || 0;
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   (game as any).state.eliminatedPlayer = eliminated;
+                  // CRITICAL: Ensure votingPhase is true when there's an eliminated player
+                  // This prevents GameBoard from showing the spin wheel screen
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (game as any).state.votingPhase = true;
                   if (serverState.wrongElimination !== undefined) {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     (game as any).state.wrongElimination = serverState.wrongElimination;
                   }
                   stateChanged = true;
+                  console.log('[GameBoard] Synced eliminated player from server:', eliminated.name, 'votes:', eliminated.votes);
                 }
+              }
+            }
+            
+            // Also sync isTie to ensure we don't show elimination if it's actually a tie
+            if (serverState.isTie !== undefined) {
+              // If server says it's a tie, clear eliminated player
+              if (serverState.isTie === true) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (game as any).state.eliminatedPlayer = undefined;
+                stateChanged = true;
+                console.log('[GameBoard] Server says it's a tie, clearing eliminated player');
               }
             }
             

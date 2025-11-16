@@ -1110,9 +1110,55 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             const data = await response.json();
             const serverState = data.room.gameStateData;
             
-            // If server already has results (eliminatedPlayer), don't check votes - results are already calculated
+            // If server already has results (eliminatedPlayer or isTie), use server's result instead of recalculating
+            // This ensures all clients see the same result
             if (serverState.eliminatedPlayer !== undefined && serverState.eliminatedPlayer !== null) {
-              // Results already exist on server, skip vote checking
+              // Server has elimination result - sync it to local state
+              console.log('[VotingPhase] Server has elimination result, syncing:', serverState.eliminatedPlayer);
+              const currentState = game.getState();
+              const eliminated = currentState.players.find(p => p.id === serverState.eliminatedPlayer.id);
+              if (eliminated) {
+                eliminated.isEliminated = true;
+                eliminated.votes = serverState.eliminatedPlayer.votes || 0;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (game as any).state.eliminatedPlayer = eliminated;
+                if (serverState.wrongElimination !== undefined) {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (game as any).state.wrongElimination = serverState.wrongElimination;
+                }
+                setEliminatedPlayer(eliminated);
+                if (serverState.wrongElimination) {
+                  setShowWrongElimination(true);
+                  setShowResults(false);
+                  setShowTieResults(false);
+                } else {
+                  setShowResults(true);
+                  setShowWrongElimination(false);
+                  setShowTieResults(false);
+                  if (eliminated.wordType === 'imposter' || eliminated.wordType === 'similar') {
+                    setShowConfetti(true);
+                  }
+                }
+                const updatedState = game.getState();
+                setGameState(updatedState);
+              }
+              return;
+            }
+            
+            // If server says it's a tie, use that result
+            if (serverState.isTie === true) {
+              console.log('[VotingPhase] Server says it's a tie, syncing tie result');
+              setShowTieResults(true);
+              setShowResults(false);
+              setShowWrongElimination(false);
+              if (serverState.tiedPlayers && Array.isArray(serverState.tiedPlayers)) {
+                const tiedPlayersFromServer = serverState.tiedPlayers.map((tp: { id: number; name: string; votes: number }) => {
+                  const currentState = game.getState();
+                  const player = currentState.players.find(p => p.id === tp.id);
+                  return player || { id: tp.id, name: tp.name, votes: tp.votes };
+                });
+                setTiedPlayers(tiedPlayersFromServer);
+              }
               return;
             }
             
@@ -1221,6 +1267,55 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                   votedForImposter: p.votedForImposter,
                   votedForOtherWord: p.votedForOtherWord
                 })));
+                
+                // CRITICAL: Check if server already has a result before calculating
+                // This prevents multiple clients from calculating different results
+                try {
+                  const checkResponse = await fetch(`/api/rooms/game-state?roomId=${encodeURIComponent(normalizedRoomId)}`);
+                  if (checkResponse.ok) {
+                    const checkData = await checkResponse.json();
+                    const checkServerState = checkData.room?.gameStateData;
+                    
+                    // If server already has elimination result, use it
+                    if (checkServerState?.eliminatedPlayer !== undefined && checkServerState.eliminatedPlayer !== null) {
+                      console.log('[VotingPhase] Server already has elimination result, using it:', checkServerState.eliminatedPlayer);
+                      const currentState = game.getState();
+                      const eliminated = currentState.players.find(p => p.id === checkServerState.eliminatedPlayer.id);
+                      if (eliminated) {
+                        eliminated.isEliminated = true;
+                        eliminated.votes = checkServerState.eliminatedPlayer.votes || 0;
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        (game as any).state.eliminatedPlayer = eliminated;
+                        setEliminatedPlayer(eliminated);
+                        setShowResults(true);
+                        setShowTieResults(false);
+                        setShowWrongElimination(checkServerState.wrongElimination || false);
+                        const updatedState = game.getState();
+                        setGameState(updatedState);
+                      }
+                      return;
+                    }
+                    
+                    // If server says it's a tie, use that result
+                    if (checkServerState?.isTie === true) {
+                      console.log('[VotingPhase] Server already says it's a tie, using that result');
+                      setShowTieResults(true);
+                      setShowResults(false);
+                      setShowWrongElimination(false);
+                      if (checkServerState.tiedPlayers && Array.isArray(checkServerState.tiedPlayers)) {
+                        const tiedPlayersFromServer = checkServerState.tiedPlayers.map((tp: { id: number; name: string; votes: number }) => {
+                          const currentState = game.getState();
+                          const player = currentState.players.find(p => p.id === tp.id);
+                          return player || { id: tp.id, name: tp.name, votes: tp.votes };
+                        });
+                        setTiedPlayers(tiedPlayersFromServer);
+                      }
+                      return;
+                    }
+                  }
+                } catch (error) {
+                  console.error('[VotingPhase] Error checking server state before calculation:', error);
+                }
                 
                 // Force state update before calculating results
                 const updatedState = game.getState();
