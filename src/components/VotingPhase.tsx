@@ -506,34 +506,48 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
         (game as any).state.votingActivated = true;
         const finalState = game.getState();
         
-        await fetch('/api/rooms/game-state', {
+        const gameStateDataToSend = {
+          currentPlayerIndex: finalState.currentPlayerIndex,
+          votingPhase: true, // Explicitly set to true
+          currentVotingPlayerIndex: 0, // Reset to first player
+          votingActivated: true, // Explicitly set to true
+          eliminatedPlayer: undefined, // Clear eliminated player
+          wrongElimination: false,
+          isTie: false,
+          votes: {}, // Clear previous votes
+          playerWords: finalState.players.reduce((acc, p) => {
+            if (p.currentWord) {
+              acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
+            }
+            return acc;
+          }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
+        };
+        
+        console.log('[VotingPhase] Admin activating voting, sending to server:', {
+          roomId,
+          gameStateData: gameStateDataToSend
+        });
+        
+        const response = await fetch('/api/rooms/game-state', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             roomId,
-            gameStateData: {
-              currentPlayerIndex: finalState.currentPlayerIndex,
-              votingPhase: finalState.votingPhase,
-              currentVotingPlayerIndex: 0, // Reset to first player
-              votingActivated: true, // Explicitly set to true
-              eliminatedPlayer: undefined, // Clear eliminated player
-              wrongElimination: false,
-              isTie: false,
-              votes: {}, // Clear previous votes
-              playerWords: finalState.players.reduce((acc, p) => {
-                if (p.currentWord) {
-                  acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
-                }
-                return acc;
-              }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
-            }
+            gameStateData: gameStateDataToSend
           })
         });
+        
+        if (response.ok) {
+          const result = await response.json();
+          console.log('[VotingPhase] Server confirmed state update:', result);
+        } else {
+          console.error('[VotingPhase] Server rejected state update:', response.status, await response.text());
+        }
         
         // Update local state after sync to ensure UI reflects the change
         setGameState(finalState);
       } catch (error) {
-        console.error('Error syncing voting activation:', error);
+        console.error('[VotingPhase] Error syncing voting activation:', error);
       }
     }
   };
@@ -547,8 +561,15 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
         const response = await fetch(`/api/rooms/game-state?roomId=${roomId}`);
         if (response.ok) {
           const data = await response.json();
+          console.log('[VotingPhase] Full server response:', data);
           if (data.room?.gameStateData) {
             const serverState = data.room.gameStateData;
+            console.log('[VotingPhase] Server state received:', {
+              votingActivated: serverState.votingActivated,
+              votingPhase: serverState.votingPhase,
+              currentVotingPlayerIndex: serverState.currentVotingPlayerIndex,
+              hasGameStateData: !!data.room.gameStateData
+            });
             let stateChanged = false;
             
             // Sync voting activation - always sync when server has a value
@@ -558,34 +579,43 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const currentActivated = (game as any).state.votingActivated;
               
+              console.log('[VotingPhase] Syncing votingActivated:', {
+                serverValue: serverState.votingActivated,
+                currentValue: currentActivated,
+                willSync: serverState.votingActivated === true || (serverState.votingActivated === false && !currentActivated)
+              });
+              
               // If server says true, always sync (admin activated voting)
               if (serverState.votingActivated === true) {
-                if (serverState.votingActivated !== currentActivated) {
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  (game as any).state.votingActivated = true;
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  (game as any).state.votingPhase = true;
-                  
-                  // Reset all players' voting state when voting is activated (new round)
-                  const currentState = game.getState();
-                  currentState.players.forEach(p => {
-                    if (!p.isEliminated) {
-                      p.hasVoted = false;
-                      p.votedFor = undefined;
-                      p.votedForImposter = undefined;
-                      p.votedForOtherWord = undefined;
-                      p.votes = 0;
-                    }
-                  });
-                  
-                  stateChanged = true;
-                  // Force immediate state update when voting is activated so players can vote
-                  const updatedState = game.getState();
-                  setGameState({ 
-                    ...updatedState,
-                    players: updatedState.players.map(p => ({ ...p }))
-                  });
-                }
+                // Always sync true, even if it's already true (to ensure UI updates)
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (game as any).state.votingActivated = true;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (game as any).state.votingPhase = true;
+                
+                // Reset all players' voting state when voting is activated (new round)
+                const currentState = game.getState();
+                currentState.players.forEach(p => {
+                  if (!p.isEliminated) {
+                    p.hasVoted = false;
+                    p.votedFor = undefined;
+                    p.votedForImposter = undefined;
+                    p.votedForOtherWord = undefined;
+                    p.votes = 0;
+                  }
+                });
+                
+                stateChanged = true;
+                console.log('[VotingPhase] Voting activated - forcing state update');
+                // Force immediate state update when voting is activated so players can vote
+                // This is critical - always update state when voting is activated
+                const updatedState = game.getState();
+                setGameState({ 
+                  ...updatedState,
+                  players: updatedState.players.map(p => ({ ...p })),
+                  votingActivated: true, // Explicitly set in component state
+                  votingPhase: true
+                });
               } else if (serverState.votingActivated === false) {
                 // Only sync false if we don't have active votes (prevent resetting mid-vote)
                 const currentState = game.getState();
@@ -599,6 +629,8 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                   stateChanged = true;
                 }
               }
+            } else {
+              console.log('[VotingPhase] Server state has no votingActivated value');
             }
             
             // Sync currentVotingPlayerIndex from server (CRITICAL for sequential voting)
@@ -820,7 +852,9 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       }
     };
     
-    const interval = setInterval(syncGameState, 500); // Poll every 500ms for faster updates
+    const interval = setInterval(syncGameState, 300); // Poll every 300ms for faster updates
+    // Also run immediately to catch any missed updates
+    syncGameState();
     return () => clearInterval(interval);
   }, [roomId, gameState.isOnline, gameState.players, gameState.votingActivated, gameState.votingPhase, game, showTieResults, showResults, showWrongElimination]);
 
@@ -1211,9 +1245,12 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   // Only show if voting is NOT activated yet AND not showing results AND no eliminated player AND definitely not admin
   // Use the already-fetched currentGameStateForRender to avoid multiple getState() calls
   // Also check the game's internal state directly to ensure we have the latest value
+  // CRITICAL: Check all possible sources to ensure we have the latest votingActivated state
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const gameInternalVotingActivated = (game as any).state.votingActivated === true;
-  const isVotingActivated = gameInternalVotingActivated || currentGameStateForRender.votingActivated === true || gameState.votingActivated === true;
+  const componentStateVotingActivated = gameState.votingActivated === true;
+  const renderStateVotingActivated = currentGameStateForRender.votingActivated === true;
+  const isVotingActivated = gameInternalVotingActivated || componentStateVotingActivated || renderStateVotingActivated;
   const shouldShowWaitingForActivation = gameState.isOnline && !isVotingActivated && isAdmin === false && !showResults && !showWrongElimination && !showTieResults && !hasEliminatedPlayer && !hasEliminatedPlayerInState;
   if (shouldShowWaitingForActivation) {
     return (
