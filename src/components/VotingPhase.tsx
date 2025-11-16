@@ -177,6 +177,12 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                 }
               });
               
+              console.log('[VotingPhase] Moving to next player, syncing to server:', {
+                currentVotingPlayerIndex: updatedState.currentVotingPlayerIndex,
+                votingActivated: votingActivatedValue,
+                activePlayersCount: activePlayersList.length
+              });
+              
               await fetch('/api/rooms/game-state', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -184,9 +190,9 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                   roomId,
                   gameStateData: {
                     currentPlayerIndex: updatedState.currentPlayerIndex,
-                    currentVotingPlayerIndex: updatedState.currentVotingPlayerIndex,
-                    votingPhase: updatedState.votingPhase,
-                    votingActivated: votingActivatedValue,
+                    currentVotingPlayerIndex: updatedState.currentVotingPlayerIndex, // This should be incremented
+                    votingPhase: true, // Keep voting phase true
+                    votingActivated: true, // CRITICAL: Keep votingActivated true
                     votes: votesForSync,
                     playerWords: updatedState.players.reduce((acc, p) => {
                       if (p.currentWord) {
@@ -196,6 +202,15 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                     }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
                   }
                 })
+              });
+              
+              // Force state update after syncing to ensure UI reflects the change
+              const finalState = game.getState();
+              setGameState({
+                ...finalState,
+                players: finalState.players.map(p => ({ ...p })),
+                votingActivated: true, // Explicitly ensure it stays true
+                votingPhase: true
               });
             } catch (error) {
               console.error('Error syncing voting index:', error);
@@ -617,15 +632,31 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                   votingPhase: true
                 });
               } else if (serverState.votingActivated === false) {
-                // Only sync false if we don't have active votes (prevent resetting mid-vote)
+                // Only sync false if we don't have active votes AND voting hasn't started yet
+                // If voting is in progress (currentVotingPlayerIndex > 0 or players have voted), don't reset
                 const currentState = game.getState();
                 const hasActiveVotes = currentState.players.some(p => 
                   !p.isEliminated && (p.hasVoted || p.votedForImposter !== undefined || p.votedForOtherWord !== undefined)
                 );
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const currentVotingIdx = (game as any).state.currentVotingPlayerIndex ?? 0;
+                const votingInProgress = currentVotingIdx > 0 || hasActiveVotes || currentState.votingPhase;
                 
-                if (!hasActiveVotes && serverState.votingActivated !== currentActivated) {
+                // Don't reset to false if voting is in progress - this prevents the loop
+                if (!hasActiveVotes && !votingInProgress && serverState.votingActivated !== currentActivated) {
+                  console.log('[VotingPhase] Resetting votingActivated to false (no active votes, voting not in progress)');
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   (game as any).state.votingActivated = false;
+                  stateChanged = true;
+                } else if (votingInProgress) {
+                  console.log('[VotingPhase] Preventing votingActivated reset - voting in progress', {
+                    currentVotingIdx,
+                    hasActiveVotes,
+                    votingPhase: currentState.votingPhase
+                  });
+                  // Keep it true if voting is in progress
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (game as any).state.votingActivated = true;
                   stateChanged = true;
                 }
               }
