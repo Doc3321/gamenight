@@ -35,16 +35,17 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
   // Poll for room updates (continue polling even when game starts to detect game state changes)
   useEffect(() => {
     let isMounted = true;
+    let shouldStopPolling = false;
     
     const fetchRoomUpdates = async () => {
-      if (!isMounted) return;
+      if (!isMounted || shouldStopPolling) return;
       
       try {
         const response = await fetch(`/api/rooms?roomId=${localRoom.id}`);
         if (response.ok) {
           const data = await response.json();
           if (data.room) {
-            if (!isMounted) return;
+            if (!isMounted || shouldStopPolling) return;
             setLocalRoom(data.room);
             onRoomUpdate?.(data.room);
             
@@ -52,20 +53,23 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
             const playerStillExists = data.room.players.find((p: { id: string }) => p.id === currentPlayerId);
             if (!playerStillExists) {
               if (isMounted) {
+                shouldStopPolling = true;
                 toast.error('הוסרת מהחדר');
                 onLeaveRoom();
               }
               return;
             }
           } else {
-            // Room doesn't exist anymore - silently leave (might have been intentional)
+            // Room doesn't exist anymore - stop polling and leave
+            shouldStopPolling = true;
             if (isMounted) {
               onLeaveRoom();
             }
             return;
           }
         } else if (response.status === 404) {
-          // Room not found - silently leave (might have been cleaned up or left intentionally)
+          // Room not found - stop polling immediately to prevent repeated 404s
+          shouldStopPolling = true;
           if (isMounted) {
             onLeaveRoom();
           }
@@ -73,6 +77,7 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
         }
       } catch (error) {
         // Only log network errors, don't show toasts for them
+        // Don't stop polling on network errors - might be temporary
         if (isMounted) {
           console.error('Error fetching room updates:', error);
         }
@@ -81,10 +86,15 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
     
     // Poll every 2 seconds while in lobby, or every 5 seconds if game started (to detect state changes)
     const pollInterval = localRoom.gameState === 'waiting' ? 2000 : 5000;
-    const interval = setInterval(fetchRoomUpdates, pollInterval);
+    const interval = setInterval(() => {
+      if (!shouldStopPolling) {
+        fetchRoomUpdates();
+      }
+    }, pollInterval);
     
     return () => {
       isMounted = false;
+      shouldStopPolling = true;
       clearInterval(interval);
     };
   }, [localRoom.id, localRoom.gameState, onRoomUpdate, currentPlayerId, onLeaveRoom]);

@@ -1,53 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { roomManager } from '@/lib/roomManager';
+import { requireAuth, isUserInRoom } from '@/lib/supabase/auth';
+import { addEmote, getRoom } from '@/lib/db/rooms';
 
 export async function POST(request: NextRequest) {
   try {
-    const { roomId, playerId, emote } = await request.json();
+    const userId = await requireAuth();
+
+    const { roomId, emote } = await request.json();
     
-    if (!roomId || !playerId || !emote) {
+    if (!roomId || !emote) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Normalize room ID to uppercase for consistent lookup
-    const normalizedRoomId = roomId.toUpperCase().trim();
-    const room = roomManager.getRoom(normalizedRoomId);
+    const room = await getRoom(roomId);
     if (!room) {
       return NextResponse.json({ error: 'Room not found' }, { status: 404 });
     }
 
-    // Initialize gameStateData if it doesn't exist
-    if (!room.gameStateData) {
-      room.gameStateData = {
-        currentPlayerIndex: 0,
-        votingPhase: false,
-        votingActivated: false,
-        emotes: []
-      };
+    const userInRoom = await isUserInRoom(userId, roomId);
+    if (!userInRoom) {
+      return NextResponse.json({ error: 'You are not in this room' }, { status: 403 });
     }
 
-    // Initialize emotes array if it doesn't exist
-    if (!room.gameStateData.emotes) {
-      room.gameStateData.emotes = [];
-    }
-
-    // Add emote
-    const player = room.players.find(p => p.id === playerId);
-    if (player) {
-      const playerIndex = room.players.findIndex(p => p.id === playerId);
-      room.gameStateData.emotes.push({
-        playerId: playerIndex + 1,
-        emote,
-        timestamp: Date.now()
-      });
-      
-      // Keep only last 20 emotes
-      if (room.gameStateData.emotes.length > 20) {
-        room.gameStateData.emotes = room.gameStateData.emotes.slice(-20);
-      }
-    }
+    await addEmote(roomId, userId, emote);
     
-    return NextResponse.json({ room });
+    const updatedRoom = await getRoom(roomId);
+    return NextResponse.json({ room: updatedRoom });
   } catch (error) {
     console.error('Error sending emote:', error);
     return NextResponse.json({ error: 'Failed to send emote' }, { status: 500 });

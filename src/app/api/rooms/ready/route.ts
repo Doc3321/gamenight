@@ -1,30 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { roomManager } from '@/lib/roomManager';
+import { requireAuth } from '@/lib/supabase/auth';
+import { updatePlayerReady, getRoom } from '@/lib/db/rooms';
 
 export async function POST(request: NextRequest) {
   try {
-    const { roomId, playerId, isReady } = await request.json();
+    const userId = await requireAuth();
+
+    const { roomId, isReady } = await request.json();
     
-    if (!roomId || !playerId || typeof isReady !== 'boolean') {
+    if (!roomId || typeof isReady !== 'boolean') {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Normalize room ID to uppercase for consistent lookup
-    const normalizedRoomId = roomId.toUpperCase().trim();
-    const room = roomManager.getRoom(normalizedRoomId);
+    const room = await getRoom(roomId);
     if (!room) {
       return NextResponse.json({ error: 'Room not found' }, { status: 404 });
     }
 
-    const player = room.players.find(p => p.id === playerId);
+    const player = room.players.find(p => p.id === userId);
     if (!player) {
       return NextResponse.json({ error: 'Player not found' }, { status: 404 });
     }
 
-    player.isReady = isReady;
+    const updatedRoom = await updatePlayerReady(roomId, userId, isReady);
     
-    return NextResponse.json({ room });
-  } catch {
+    if (!updatedRoom) {
+      return NextResponse.json({ error: 'Failed to update ready status' }, { status: 500 });
+    }
+
+    return NextResponse.json({ room: updatedRoom });
+  } catch (error) {
+    console.error('Error updating ready status:', error);
     return NextResponse.json({ error: 'Failed to update ready status' }, { status: 500 });
   }
 }

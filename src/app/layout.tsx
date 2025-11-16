@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Heebo } from "next/font/google";
 import { Toaster } from "sonner";
+import { ClerkProvider } from "@clerk/nextjs";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import "./globals.css";
 
@@ -21,15 +22,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="he" dir="rtl" suppressHydrationWarning>
-      <body
-        className={`${heebo.variable} font-hebrew antialiased`}
-      >
-        <ThemeProvider defaultTheme="system" storageKey="soken-theme">
-          {children}
-          <Toaster position="top-center" richColors />
-        </ThemeProvider>
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="he" dir="rtl" suppressHydrationWarning>
+        <body
+          className={`${heebo.variable} font-hebrew antialiased`}
+        >
+          <ThemeProvider defaultTheme="system" storageKey="soken-theme">
+            {children}
+            <Toaster position="top-center" richColors />
+          </ThemeProvider>
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { roomManager } from '@/lib/roomManager';
+import { requireAuth } from '@/lib/supabase/auth';
+import { leaveRoom } from '@/lib/db/rooms';
 
 export async function POST(request: NextRequest) {
   try {
-    const { playerId } = await request.json();
-    
-    if (!playerId) {
-      return NextResponse.json({ error: 'Missing playerId' }, { status: 400 });
-    }
+    const userId = await requireAuth();
 
-    const room = roomManager.leaveRoom(playerId);
+    const room = await leaveRoom(userId);
     
     if (room) {
       return NextResponse.json({ room });

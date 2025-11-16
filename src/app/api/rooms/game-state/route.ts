@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { roomManager } from '@/lib/roomManager';
+import { requireAuth, isUserInRoom } from '@/lib/supabase/auth';
+import { getRoom, updateGameState } from '@/lib/db/rooms';
 
 export async function GET(request: NextRequest) {
   try {
+    await requireAuth();
+
     const { searchParams } = new URL(request.url);
     const roomId = searchParams.get('roomId');
     
@@ -10,9 +13,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Missing roomId' }, { status: 400 });
     }
 
-    // Normalize room ID to uppercase for consistent lookup
-    const normalizedRoomId = roomId.toUpperCase().trim();
-    const room = roomManager.getRoom(normalizedRoomId);
+    const room = await getRoom(roomId);
     
     if (!room) {
       return NextResponse.json({ error: 'Room not found' }, { status: 404 });
@@ -27,22 +28,29 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const userId = await requireAuth();
+
     const { roomId, gameStateData } = await request.json();
     
     if (!roomId || !gameStateData) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Normalize room ID to uppercase for consistent lookup
-    const normalizedRoomId = roomId.toUpperCase().trim();
-    const room = roomManager.getRoom(normalizedRoomId);
+    // Verify user is in the room
+    const room = await getRoom(roomId);
     if (!room) {
       return NextResponse.json({ error: 'Room not found' }, { status: 404 });
     }
 
-    room.gameStateData = gameStateData;
+    const userInRoom = await isUserInRoom(userId, roomId);
+    if (!userInRoom) {
+      return NextResponse.json({ error: 'You are not in this room' }, { status: 403 });
+    }
+
+    await updateGameState(roomId, gameStateData);
     
-    return NextResponse.json({ room });
+    const updatedRoom = await getRoom(roomId);
+    return NextResponse.json({ room: updatedRoom });
   } catch (error) {
     console.error('Error updating game state:', error);
     return NextResponse.json({ error: 'Failed to update game state' }, { status: 500 });
