@@ -34,40 +34,59 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
   
   // Poll for room updates (continue polling even when game starts to detect game state changes)
   useEffect(() => {
+    let isMounted = true;
+    
     const fetchRoomUpdates = async () => {
+      if (!isMounted) return;
+      
       try {
         const response = await fetch(`/api/rooms?roomId=${localRoom.id}`);
         if (response.ok) {
           const data = await response.json();
           if (data.room) {
+            if (!isMounted) return;
             setLocalRoom(data.room);
             onRoomUpdate?.(data.room);
             
             // Check if current player was removed
             const playerStillExists = data.room.players.find((p: { id: string }) => p.id === currentPlayerId);
             if (!playerStillExists) {
-              toast.error('הוסרת מהחדר');
-              onLeaveRoom();
+              if (isMounted) {
+                toast.error('הוסרת מהחדר');
+                onLeaveRoom();
+              }
+              return;
             }
           } else {
-            // Room doesn't exist anymore
-            toast.error('החדר נמחק');
-            onLeaveRoom();
+            // Room doesn't exist anymore - silently leave (might have been intentional)
+            if (isMounted) {
+              onLeaveRoom();
+            }
+            return;
           }
         } else if (response.status === 404) {
-          // Room not found
-          toast.error('החדר לא נמצא');
-          onLeaveRoom();
+          // Room not found - silently leave (might have been cleaned up or left intentionally)
+          if (isMounted) {
+            onLeaveRoom();
+          }
+          return;
         }
       } catch (error) {
-        console.error('Error fetching room updates:', error);
+        // Only log network errors, don't show toasts for them
+        if (isMounted) {
+          console.error('Error fetching room updates:', error);
+        }
       }
     };
     
     // Poll every 2 seconds while in lobby, or every 5 seconds if game started (to detect state changes)
     const pollInterval = localRoom.gameState === 'waiting' ? 2000 : 5000;
     const interval = setInterval(fetchRoomUpdates, pollInterval);
-    return () => clearInterval(interval);
+    
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, [localRoom.id, localRoom.gameState, onRoomUpdate, currentPlayerId, onLeaveRoom]);
   
   const isHost = localRoom.players.find(p => p.id === currentPlayerId)?.isHost || false;
@@ -95,17 +114,21 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
         })
       });
       
-      if (!response.ok) {
-        throw new Error('Failed to update ready status');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.room) {
+          setLocalRoom(data.room);
+          onRoomUpdate?.(data.room);
+        }
+      } else if (response.status === 404) {
+        // Room not found - silently leave
+        onLeaveRoom();
+      } else {
+        toast.error('שגיאה בעדכון סטטוס מוכן');
       }
-      
-      const data = await response.json();
-      if (data.room) {
-        setLocalRoom(data.room);
-        onRoomUpdate?.(data.room);
-      }
-    } catch {
-      toast.error('שגיאה בעדכון סטטוס מוכן');
+    } catch (error) {
+      // Don't show toast for network errors - might be temporary
+      console.error('Error toggling ready:', error);
     } finally {
       setIsTogglingReady(false);
     }

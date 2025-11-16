@@ -1342,8 +1342,10 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   
   // Show waiting screen if it's not my turn to vote (online mode only)
   // BUT: Don't show waiting screen if I've already voted - show "voted" status instead
-  const hasVotedForDisplay = currentPlayer?.hasVoted || 
-    (isBothMode && currentPlayer?.votedForImposter !== undefined && currentPlayer?.votedForOtherWord !== undefined);
+  const hasVotedForDisplay = currentPlayer ? (
+    currentPlayer.hasVoted || 
+    (isBothMode && currentPlayer.votedForImposter !== undefined && currentPlayer.votedForOtherWord !== undefined)
+  ) : false;
   
   if (gameState.isOnline && !isMyTurnToVote && currentVotingIndex < activePlayersForVoting.length && !hasVotedForDisplay) {
     const currentVotingPlayer = activePlayersForVoting[currentVotingIndex];
