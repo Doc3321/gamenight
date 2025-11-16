@@ -12,50 +12,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    // Upload to Supabase Storage
-    const { getSupabaseAdmin } = await import('@/lib/supabase/server');
-    const adminClient = getSupabaseAdmin();
-
-    // Convert file to buffer
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    // Generate unique filename
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${userId}/${Date.now()}.${fileExt}`;
-
-    // Upload to Supabase Storage
-    const { error: uploadError } = await adminClient.storage
-      .from('profile-photos')
-      .upload(fileName, buffer, {
-        contentType: file.type,
-        upsert: false,
-      });
-
-    if (uploadError) {
-      console.error('Upload error:', uploadError);
-      return NextResponse.json({ error: 'Failed to upload image' }, { status: 500 });
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      return NextResponse.json({ error: 'File must be an image' }, { status: 400 });
     }
 
-    // Get public URL
-    const { data: urlData } = adminClient.storage
-      .from('profile-photos')
-      .getPublicUrl(fileName);
+    // Validate file size (max 2MB for base64 storage)
+    const maxSize = 2 * 1024 * 1024; // 2MB
+    if (file.size > maxSize) {
+      return NextResponse.json({ error: 'Image too large. Maximum size is 2MB.' }, { status: 400 });
+    }
 
-    const profilePhotoUrl = urlData.publicUrl;
+    // Convert file to base64 data URL
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const base64 = buffer.toString('base64');
+    const dataUrl = `data:${file.type};base64,${base64}`;
 
-    // Update profile with photo URL
+    console.log('[Upload] Image converted to base64, size:', base64.length, 'chars');
+
+    // Store base64 data URL directly in database
     const profile = await createOrUpdateProfile(userId, {
-      profilePhotoUrl,
+      profilePhotoUrl: dataUrl,
     });
 
-    return NextResponse.json({ profile, photoUrl: profilePhotoUrl });
+    return NextResponse.json({ profile, photoUrl: dataUrl });
   } catch (error) {
     console.error('Error uploading profile photo:', error);
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    return NextResponse.json({ error: 'Failed to upload photo' }, { status: 500 });
+    return NextResponse.json({ 
+      error: error instanceof Error ? error.message : 'Failed to upload photo' 
+    }, { status: 500 });
   }
 }
 

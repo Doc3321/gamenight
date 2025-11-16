@@ -43,6 +43,12 @@ export const supabaseAdmin = {
   get from() {
     return getSupabaseAdmin().from;
   },
+  get storage() {
+    return getSupabaseAdmin().storage;
+  },
+  get channel() {
+    return getSupabaseAdmin().channel.bind(getSupabaseAdmin());
+  },
 } as SupabaseClient;
 
 // Export the function for broadcast use
