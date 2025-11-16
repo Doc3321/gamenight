@@ -17,6 +17,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { GameRoom, Player } from '@/lib/roomManager';
 import AgentLoadingScreen from '@/components/AgentLoadingScreen';
 import { useRouter } from 'next/navigation';
+import { HeaderMenu } from '@/components/HeaderMenu';
 
 type AppMode = 'local' | 'online';
 
@@ -308,16 +309,8 @@ export default function Home() {
   if (appMode === 'online' && !room) {
   return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 dark:from-gray-900 dark:via-purple-900 dark:to-gray-800 p-4 relative">
-        <div className="absolute top-4 left-4 z-10 flex gap-2">
-          <ThemeToggle />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.push('/profile')}
-            className="text-xs"
-          >
-            פרופיל
-          </Button>
+        <div className="absolute top-4 left-4 z-10">
+          <HeaderMenu />
         </div>
         <div className="max-w-4xl mx-auto">
           <motion.div
@@ -337,7 +330,7 @@ export default function Home() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 dark:from-gray-900 dark:via-purple-900 dark:to-gray-800 p-4 relative">
         <div className="absolute top-4 left-4 z-10">
-          <ThemeToggle />
+          <HeaderMenu />
         </div>
         <div className="max-w-4xl mx-auto">
           <motion.div
@@ -382,7 +375,7 @@ export default function Home() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 dark:from-gray-900 dark:via-purple-900 dark:to-gray-800 flex items-center justify-center p-4 relative">
         <div className="absolute top-4 left-4">
-          <ThemeToggle />
+          <HeaderMenu />
         </div>
         <motion.div
           initial={{ opacity: 0, y: 50, scale: 0.9 }}
@@ -483,7 +476,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 dark:from-gray-900 dark:via-purple-900 dark:to-gray-800 relative">
       <div className="absolute top-4 left-4 z-10">
-        <ThemeToggle />
+        <HeaderMenu />
       </div>
       <div className="container mx-auto px-4 py-8">
         <motion.div 

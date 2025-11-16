@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useUser } from '@clerk/nextjs';
+import { useUser, useClerk } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,9 +11,11 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import AgentSpinner from '@/components/AgentSpinner';
+import { HeaderMenu } from '@/components/HeaderMenu';
 
 export default function ProfilePage() {
   const { user, isLoaded } = useUser();
+  const { signOut } = useClerk();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -148,7 +150,7 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 dark:from-gray-900 dark:via-purple-900 dark:to-gray-800 p-4 relative">
       <div className="absolute top-4 left-4 z-10">
-        <ThemeToggle />
+        <HeaderMenu />
       </div>
       <div className="max-w-2xl mx-auto pt-16">
         <motion.div
@@ -232,20 +234,32 @@ export default function ProfilePage() {
               </div>
 
               {/* Actions */}
-              <div className="flex gap-4 pt-4">
+              <div className="flex flex-col gap-4 pt-4">
+                <div className="flex gap-4">
+                  <Button
+                    onClick={handleSave}
+                    disabled={isSaving || !nickname.trim()}
+                    className="flex-1"
+                  >
+                    {isSaving ? 'שומר...' : 'שמור'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => router.push('/')}
+                    className="flex-1"
+                  >
+                    ביטול
+                  </Button>
+                </div>
                 <Button
-                  onClick={handleSave}
-                  disabled={isSaving || !nickname.trim()}
-                  className="flex-1"
+                  variant="destructive"
+                  onClick={() => {
+                    signOut();
+                    router.push('/');
+                  }}
+                  className="w-full"
                 >
-                  {isSaving ? 'שומר...' : 'שמור'}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => router.push('/')}
-                  className="flex-1"
-                >
-                  ביטול
+                  התנתק
                 </Button>
               </div>
             </CardContent>
