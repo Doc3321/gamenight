@@ -13,17 +13,14 @@ import JoinRoom from '@/components/JoinRoom';
 import RoomLobby from '@/components/RoomLobby';
 import GameSetup from '@/components/GameSetup';
 import { Player as GamePlayer } from '@/lib/gameLogic';
-import { ThemeToggle } from '@/components/ThemeToggle';
 import { GameRoom, Player } from '@/lib/roomManager';
 import AgentLoadingScreen from '@/components/AgentLoadingScreen';
-import { useRouter } from 'next/navigation';
 import { HeaderMenu } from '@/components/HeaderMenu';
 
 type AppMode = 'local' | 'online';
 
 export default function Home() {
   const { user, isLoaded } = useUser();
-  const router = useRouter();
   const [appMode, setAppMode] = useState<AppMode>('local');
   const [game, setGame] = useState<WordGame | null>(null);
   const [selectedTopic, setSelectedTopic] = useState<string>('');
