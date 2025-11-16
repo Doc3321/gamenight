@@ -1164,7 +1164,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             
             // If server says it's a tie, use that result
             if (serverState.isTie === true) {
-              console.log('[VotingPhase] Server says it's a tie, syncing tie result');
+              console.log('[VotingPhase] Server says its a tie, syncing tie result');
               setShowTieResults(true);
               setShowResults(false);
               setShowWrongElimination(false);
@@ -1321,7 +1321,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                     
                     // If server says it's a tie, use that result
                     if (checkServerState?.isTie === true) {
-                      console.log('[VotingPhase] Server already says it's a tie, using that result');
+                      console.log('[VotingPhase] Server already says its a tie, using that result');
                       setShowTieResults(true);
                       setShowResults(false);
                       setShowWrongElimination(false);
