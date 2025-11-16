@@ -669,6 +669,10 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const currentVotingIdx = (game as any).state.currentVotingPlayerIndex ?? 0;
               if (serverState.currentVotingPlayerIndex !== currentVotingIdx) {
+                console.log('[VotingPhase] currentVotingPlayerIndex changed:', {
+                  old: currentVotingIdx,
+                  new: serverState.currentVotingPlayerIndex
+                });
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (game as any).state.currentVotingPlayerIndex = serverState.currentVotingPlayerIndex;
                 stateChanged = true;
@@ -676,16 +680,26 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                 const updatedState = game.getState();
                 setGameState({ 
                   ...updatedState,
-                  players: updatedState.players.map(p => ({ ...p }))
+                  players: updatedState.players.map(p => ({ ...p })),
+                  currentVotingPlayerIndex: serverState.currentVotingPlayerIndex
                 });
-                // Also force a re-render by updating component state
+                // Force multiple re-renders to ensure UI updates
                 setTimeout(() => {
                   const freshState = game.getState();
                   setGameState({ 
                     ...freshState,
-                    players: freshState.players.map(p => ({ ...p }))
+                    players: freshState.players.map(p => ({ ...p })),
+                    currentVotingPlayerIndex: serverState.currentVotingPlayerIndex
                   });
-                }, 100);
+                }, 50);
+                setTimeout(() => {
+                  const freshState = game.getState();
+                  setGameState({ 
+                    ...freshState,
+                    players: freshState.players.map(p => ({ ...p })),
+                    currentVotingPlayerIndex: serverState.currentVotingPlayerIndex
+                  });
+                }, 200);
               }
             }
             
@@ -889,7 +903,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       }
     };
     
-    const interval = setInterval(syncGameState, 300); // Poll every 300ms for faster updates
+    const interval = setInterval(syncGameState, 200); // Poll every 200ms for faster updates during voting
     // Also run immediately to catch any missed updates
     syncGameState();
     return () => clearInterval(interval);
@@ -1324,13 +1338,27 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   
   // For online mode: Check if it's this player's turn to vote (sequential voting like word-getting)
   // Get currentVotingPlayerIndex directly from game state to ensure we have the latest value
+  // Also check component state for the most up-to-date value
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const gameInternalVotingIndex = (game as any).state.currentVotingPlayerIndex ?? 0;
-  const currentVotingIndex = gameInternalVotingIndex !== undefined ? gameInternalVotingIndex : (currentGameStateForRender.currentVotingPlayerIndex ?? 0);
+  const componentStateVotingIndex = gameState.currentVotingPlayerIndex ?? gameInternalVotingIndex;
+  const currentVotingIndex = componentStateVotingIndex !== undefined ? componentStateVotingIndex : (currentGameStateForRender.currentVotingPlayerIndex ?? gameInternalVotingIndex);
   const activePlayersForVoting = currentGameStateForRender.players.filter(p => !p.isEliminated);
   const isMyTurnToVote = gameState.isOnline 
     ? (currentVotingIndex < activePlayersForVoting.length && activePlayersForVoting[currentVotingIndex]?.id === currentPlayerId)
     : true; // Local mode: always show voting UI
+  
+  // Debug logging for turn detection
+  if (gameState.isOnline) {
+    console.log('[VotingPhase] Turn check:', {
+      currentVotingIndex,
+      currentPlayerId,
+      currentVotingPlayerId: activePlayersForVoting[currentVotingIndex]?.id,
+      isMyTurnToVote,
+      hasVoted,
+      activePlayersCount: activePlayersForVoting.length
+    });
+  }
   
   // Can vote if: not voted yet, voting is activated (for online mode), AND it's my turn (for online mode)
   // Use the already-fetched currentGameStateForRender to avoid multiple getState() calls
