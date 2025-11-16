@@ -278,25 +278,48 @@ export default function Home() {
     // Don't clear playerId from localStorage - keep it for reconnection
   };
 
-  // Handle browser navigation/close - warn admin if leaving during game
+  // Handle browser navigation/close - delete room if admin leaves
   useEffect(() => {
-    if (appMode !== 'online' || !room) return;
+    if (appMode !== 'online' || !room || !currentPlayerId) return;
     
     const isAdmin = room.hostId === currentPlayerId;
     const isInGame = game !== null;
     
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (isAdmin && isInGame) {
-        e.preventDefault();
-        e.returnValue = 'אתה המארח במשחק פעיל. האם אתה בטוח שברצונך לעזוב?';
-        return e.returnValue;
+    const handleBeforeUnload = async (e: BeforeUnloadEvent) => {
+      if (isAdmin) {
+        if (isInGame) {
+          e.preventDefault();
+          e.returnValue = 'אתה המארח במשחק פעיל. האם אתה בטוח שברצונך לעזוב?';
+        }
+        // Delete room when admin leaves (even if not in game)
+        // Use fetch with keepalive for reliable delivery even on page close
+        fetch('/api/rooms/leave', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerId: currentPlayerId }),
+          keepalive: true
+        }).catch(() => {});
+      }
+    };
+    
+    const handleVisibilityChange = () => {
+      // When page becomes hidden (tab switch, minimize, close), delete room if admin
+      if (document.hidden && isAdmin) {
+        fetch('/api/rooms/leave', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerId: currentPlayerId }),
+          keepalive: true
+        }).catch(() => {});
       }
     };
     
     window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [appMode, room, currentPlayerId, game]);
 

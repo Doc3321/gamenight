@@ -400,13 +400,31 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     // Reset voting activation so admin needs to activate again
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (game as any).state.votingActivated = false;
+    // Reset currentVotingPlayerIndex to 0 for new voting round
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (game as any).state.currentVotingPlayerIndex = 0;
+    // Clear all result states
     const updatedState = game.getState();
     setGameState(updatedState);
     setShowTieResults(false);
+    setShowResults(false);
+    setShowWrongElimination(false);
     setTiedPlayers([]);
+    setEliminatedPlayer(null);
     setSelectedTarget(null);
     setSelectedImposterTarget(null);
     setSelectedOtherWordTarget(null);
+    
+    // Reset all players' voting state
+    updatedState.players.forEach(p => {
+      if (!p.isEliminated) {
+        p.hasVoted = false;
+        p.votedFor = undefined;
+        p.votedForImposter = undefined;
+        p.votedForOtherWord = undefined;
+        p.votes = 0;
+      }
+    });
     
     // Sync revote to server
     if (roomId && gameState.isOnline) {
@@ -418,12 +436,13 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             roomId,
             gameStateData: {
               currentPlayerIndex: updatedState.currentPlayerIndex,
-              votingPhase: updatedState.votingPhase,
+              votingPhase: false, // Reset voting phase
+              currentVotingPlayerIndex: 0, // Reset to first player
               votingActivated: false, // Reset activation
               isTie: false,
               wrongElimination: false,
               eliminatedPlayer: undefined,
-              votes: {},
+              votes: {}, // Clear all votes
               playerWords: updatedState.players.reduce((acc, p) => {
                 if (p.currentWord) {
                   acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
@@ -433,6 +452,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             }
           })
         });
+        console.log('[VotingPhase] Revote synced to server');
       } catch (error) {
         console.error('Error syncing revote:', error);
       }

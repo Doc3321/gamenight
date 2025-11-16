@@ -301,7 +301,16 @@ export async function leaveRoom(userId: string): Promise<GameRoom | null> {
   }
 
   const isHost = player.isHost;
-  const isOnlyPlayer = room.players.length === 1;
+  const wasOnlyPlayer = room.players.length === 1;
+
+  // If host was the only player, delete room immediately before removing player
+  if (isHost && wasOnlyPlayer) {
+    console.log('[DB] Host was only player, deleting room:', roomId);
+    await supabaseAdmin.from('rooms').delete().eq('id', roomId);
+    await supabaseAdmin.from('room_players').delete().eq('room_id', roomId);
+    await supabaseAdmin.from('game_states').delete().eq('room_id', roomId);
+    return null;
+  }
 
   // Remove player
   await supabaseAdmin
@@ -327,9 +336,10 @@ export async function leaveRoom(userId: string): Promise<GameRoom | null> {
     }
   }
 
-  // If no players left (or host was the only player), delete room immediately
+  // Check if room is now empty after removing player
   const updatedRoom = await getRoom(roomId);
   if (updatedRoom && updatedRoom.players.length === 0) {
+    // No players left - delete room
     console.log('[DB] Deleting empty room:', roomId);
     await supabaseAdmin.from('rooms').delete().eq('id', roomId);
     await supabaseAdmin.from('room_players').delete().eq('room_id', roomId);
