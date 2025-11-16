@@ -183,6 +183,13 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                 activePlayersCount: activePlayersList.length
               });
               
+              // Force immediate state update before syncing
+              setGameState({
+                ...updatedState,
+                players: updatedState.players.map(p => ({ ...p })),
+                currentVotingPlayerIndex: updatedState.currentVotingPlayerIndex
+              });
+              
               await fetch('/api/rooms/game-state', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -203,6 +210,8 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                   }
                 })
               });
+              
+              console.log('[VotingPhase] Turn progression synced to server, next player index:', updatedState.currentVotingPlayerIndex);
               
               // Force state update after syncing to ensure UI reflects the change
               const finalState = game.getState();
@@ -370,6 +379,11 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       // Sync wrong elimination to server
       if (roomId && gameState.isOnline && result.eliminated) {
         try {
+          console.log('[VotingPhase] Syncing wrong elimination result to server:', {
+            eliminatedPlayer: result.eliminated.name,
+            votes: result.eliminated.votes
+          });
+          
           await fetch('/api/rooms/game-state', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -386,6 +400,8 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                   votes: result.eliminated.votes || 0
                 },
                 wrongElimination: true,
+                isTie: false, // CRITICAL: Clear tie flag
+                tiedPlayers: undefined, // Clear tied players
                 playerWords: newState.players.reduce((acc, p) => {
                   if (p.currentWord) {
                     acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
@@ -1047,7 +1063,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
         if (!shouldStopPolling) {
           syncGameState();
         }
-      }, 200); // Poll every 200ms for faster updates during voting
+      }, 100); // Poll every 100ms for faster updates during voting
       
       // Also run immediately to catch any missed updates
       syncGameState();
@@ -1214,16 +1230,17 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                 });
                 
                 // Calculate results immediately - handleCalculateResults will recalculate votes
+                // Use a shorter timeout to make results appear faster
                 setTimeout(() => {
                   handleCalculateResults();
-                }, 100);
+                }, 50);
               }
             }
           }
         } catch (error) {
           console.error('Error checking voting completion:', error);
         }
-      }, 300); // Check every 300ms for faster detection of all votes
+      }, 150); // Check every 150ms for faster detection of all votes
 
       return () => {
         shouldStopPolling = true;
