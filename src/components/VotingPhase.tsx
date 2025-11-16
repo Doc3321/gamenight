@@ -1017,14 +1017,24 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                 });
                 
                 // Now calculate results since local state is synced
-                handleCalculateResults();
+                console.log('[VotingPhase] All players voted, calculating results');
+                // Force state update before calculating results
+                const updatedState = game.getState();
+                setGameState({
+                  ...updatedState,
+                  players: updatedState.players.map(p => ({ ...p }))
+                });
+                // Calculate results after state is updated
+                setTimeout(() => {
+                  handleCalculateResults();
+                }, 100);
               }
             }
           }
         } catch (error) {
           console.error('Error checking voting completion:', error);
         }
-      }, 500); // Check every 500ms for updates
+      }, 300); // Check every 300ms for faster detection of all votes
 
       return () => clearInterval(interval);
     }
@@ -1370,12 +1380,16 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   
   // Show waiting screen if it's not my turn to vote (online mode only)
   // BUT: Don't show waiting screen if I've already voted - show "voted" status instead
+  // ALSO: Don't show waiting screen if all players have voted - show results instead
   const hasVotedForDisplay = currentPlayer ? (
     currentPlayer.hasVoted || 
     (isBothMode && currentPlayer.votedForImposter !== undefined && currentPlayer.votedForOtherWord !== undefined)
   ) : false;
   
-  if (gameState.isOnline && !isMyTurnToVote && currentVotingIndex < activePlayersForVoting.length && !hasVotedForDisplay) {
+  // Check if all players have voted
+  const allPlayersVoted = game.allPlayersVoted();
+  
+  if (gameState.isOnline && !isMyTurnToVote && currentVotingIndex < activePlayersForVoting.length && !hasVotedForDisplay && !allPlayersVoted) {
     const currentVotingPlayer = activePlayersForVoting[currentVotingIndex];
     return (
       <div className="max-w-2xl mx-auto relative">
@@ -1425,7 +1439,8 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   }
   
   // Show "already voted" screen if player has voted but it's not their turn anymore
-  if (gameState.isOnline && !isMyTurnToVote && hasVotedForDisplay && currentVotingIndex < activePlayersForVoting.length) {
+  // BUT: Don't show if all players have voted - show results instead
+  if (gameState.isOnline && !isMyTurnToVote && hasVotedForDisplay && currentVotingIndex < activePlayersForVoting.length && !allPlayersVoted) {
     const currentVotingPlayer = activePlayersForVoting[currentVotingIndex];
     return (
       <div className="max-w-2xl mx-auto relative">
