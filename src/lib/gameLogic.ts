@@ -134,6 +134,10 @@ export class WordGame {
     const spinType = this.state.spinOrder[this.state.currentPlayerIndex];
     const selectedWord = this.state.gameWord;
     const currentPlayer = this.state.players[this.state.currentPlayerIndex];
+    
+    if (!currentPlayer) {
+      return null;
+    }
     console.log(`Spin ${this.state.currentPlayerIndex + 1} (${currentPlayer.name}): spinType = ${spinType}`); // Debug log
 
     let finalChoices: string[];
