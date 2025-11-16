@@ -42,7 +42,7 @@ export async function createOrUpdateProfile(
 
   if (existing) {
     // Update existing profile - only update fields that are provided
-    const updateData: { nickname?: string; profile_photo_url?: string | null } = {};
+    const updateData: { nickname?: string | null; profile_photo_url?: string | null } = {};
     
     if (updates.nickname !== undefined) {
       updateData.nickname = updates.nickname || null;
