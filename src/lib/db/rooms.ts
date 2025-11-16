@@ -221,11 +221,27 @@ export async function getOpenRooms(): Promise<GameRoom[]> {
         .eq('room_id', room.id)
         .order('created_at', { ascending: true });
 
-      return dbRoomToGameRoom(room, players || []);
+      const gameRoom = dbRoomToGameRoom(room, players || []);
+      
+      // If room has no players, delete it and return null
+      if (gameRoom.players.length === 0) {
+        console.log('[DB] Found empty room, deleting:', room.id);
+        try {
+          await supabaseAdmin.from('rooms').delete().eq('id', room.id);
+          await supabaseAdmin.from('room_players').delete().eq('room_id', room.id);
+          await supabaseAdmin.from('game_states').delete().eq('room_id', room.id);
+        } catch (deleteError) {
+          console.error('[DB] Error deleting empty room:', deleteError);
+        }
+        return null;
+      }
+      
+      return gameRoom;
     })
   );
 
-  return roomsWithPlayers;
+  // Filter out null values (deleted empty rooms)
+  return roomsWithPlayers.filter((room): room is GameRoom => room !== null);
 }
 
 export async function joinRoom(
@@ -238,6 +254,19 @@ export async function joinRoom(
   // Check if room exists and is in waiting state
   const room = await getRoom(normalizedRoomId);
   if (!room || room.gameState !== 'waiting') {
+    return null;
+  }
+  
+  // If room has no players, delete it (orphaned room)
+  if (room.players.length === 0) {
+    console.log('[DB] Room has no players, deleting orphaned room:', normalizedRoomId);
+    try {
+      await supabaseAdmin.from('rooms').delete().eq('id', normalizedRoomId);
+      await supabaseAdmin.from('room_players').delete().eq('room_id', normalizedRoomId);
+      await supabaseAdmin.from('game_states').delete().eq('room_id', normalizedRoomId);
+    } catch (deleteError) {
+      console.error('[DB] Error deleting orphaned room:', deleteError);
+    }
     return null;
   }
 

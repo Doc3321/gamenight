@@ -279,6 +279,53 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       return;
     }
     
+    // CRITICAL: Recalculate vote counts from scratch before calculating results
+    const stateBeforeCalc = game.getState();
+    console.log('[VotingPhase] Recalculating votes before calculateVotingResult');
+    
+    // Reset all vote counts
+    stateBeforeCalc.players.forEach(p => {
+      p.votes = 0;
+    });
+    
+    // Recalculate votes from player voting data
+    stateBeforeCalc.players.forEach(voter => {
+      if (!voter.isEliminated) {
+        if (stateBeforeCalc.gameMode === 'mixed') {
+          if (voter.votedForImposter !== undefined) {
+            const target = stateBeforeCalc.players.find(p => p.id === voter.votedForImposter);
+            if (target && !target.isEliminated) {
+              if (target.votes === undefined) target.votes = 0;
+              target.votes++;
+            }
+          }
+          if (voter.votedForOtherWord !== undefined) {
+            const target = stateBeforeCalc.players.find(p => p.id === voter.votedForOtherWord);
+            if (target && !target.isEliminated) {
+              if (target.votes === undefined) target.votes = 0;
+              target.votes++;
+            }
+          }
+        } else if (voter.votedFor !== undefined) {
+          const target = stateBeforeCalc.players.find(p => p.id === voter.votedFor);
+          if (target && !target.isEliminated) {
+            if (target.votes === undefined) target.votes = 0;
+            target.votes++;
+          }
+        }
+      }
+    });
+    
+    console.log('[VotingPhase] Vote counts after recalculation in handleCalculateResults:', stateBeforeCalc.players.map(p => ({
+      name: p.name,
+      votes: p.votes,
+      isEliminated: p.isEliminated,
+      votedFor: p.votedFor,
+      votedForImposter: p.votedForImposter,
+      votedForOtherWord: p.votedForOtherWord
+    })));
+    
+    // Now calculate results with accurate vote counts
     const result = game.calculateVotingResult();
     const newState = game.getState();
     setGameState(newState);
@@ -1059,16 +1106,13 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               if (allVoted && !showResults && !showTieResults && !showWrongElimination) {
                 // Sync votes from server to local game state
                 const currentState = game.getState();
+                
+                // Reset vote counts only (don't reset voting data - preserve it)
                 currentState.players.forEach(p => {
                   p.votes = 0;
-                  if (!p.isEliminated) {
-                    p.hasVoted = false;
-                    p.votedFor = undefined;
-                    p.votedForImposter = undefined;
-                    p.votedForOtherWord = undefined;
-                  }
                 });
                 
+                // Apply votes from server to voting data
                 Object.entries(serverVotes).forEach(([, voteData]) => {
                   type VoteData = { voterId: number; targetId: number; voteType?: 'imposter' | 'other-word' };
                   const vote = voteData as VoteData;
@@ -1087,21 +1131,46 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                       voter.votedFor = vote.targetId;
                       voter.hasVoted = true;
                     }
-                    
-                    const target = currentState.players.find(p => p.id === vote.targetId);
-                    if (target && !target.isEliminated) {
-                      if (target.votes === undefined) target.votes = 0;
-                      target.votes++;
+                  }
+                });
+                
+                // Now recalculate vote counts from voting data
+                currentState.players.forEach(voter => {
+                  if (!voter.isEliminated) {
+                    if (isBothMode) {
+                      if (voter.votedForImposter !== undefined) {
+                        const target = currentState.players.find(p => p.id === voter.votedForImposter);
+                        if (target && !target.isEliminated) {
+                          if (target.votes === undefined) target.votes = 0;
+                          target.votes++;
+                        }
+                      }
+                      if (voter.votedForOtherWord !== undefined) {
+                        const target = currentState.players.find(p => p.id === voter.votedForOtherWord);
+                        if (target && !target.isEliminated) {
+                          if (target.votes === undefined) target.votes = 0;
+                          target.votes++;
+                        }
+                      }
+                    } else if (voter.votedFor !== undefined) {
+                      const target = currentState.players.find(p => p.id === voter.votedFor);
+                      if (target && !target.isEliminated) {
+                        if (target.votes === undefined) target.votes = 0;
+                        target.votes++;
+                      }
                     }
                   }
                 });
                 
                 // Now calculate results since local state is synced
                 console.log('[VotingPhase] All players voted, calculating results');
-                console.log('[VotingPhase] Vote counts before calculation:', currentState.players.map(p => ({
+                console.log('[VotingPhase] Vote counts after sync and recalculation:', currentState.players.map(p => ({
                   name: p.name,
                   votes: p.votes,
-                  isEliminated: p.isEliminated
+                  isEliminated: p.isEliminated,
+                  votedFor: p.votedFor,
+                  votedForImposter: p.votedForImposter,
+                  votedForOtherWord: p.votedForOtherWord
                 })));
                 
                 // Force state update before calculating results
@@ -1111,48 +1180,8 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                   players: updatedState.players.map(p => ({ ...p }))
                 });
                 
-                // Calculate results after state is updated
+                // Calculate results immediately - handleCalculateResults will recalculate votes
                 setTimeout(() => {
-                  // Recalculate vote counts from votes to ensure accuracy
-                  const stateBeforeCalc = game.getState();
-                  stateBeforeCalc.players.forEach(p => {
-                    p.votes = 0;
-                  });
-                  
-                  // Recalculate votes from player voting data
-                  stateBeforeCalc.players.forEach(voter => {
-                    if (!voter.isEliminated) {
-                      if (stateBeforeCalc.gameMode === 'mixed') {
-                        if (voter.votedForImposter !== undefined) {
-                          const target = stateBeforeCalc.players.find(p => p.id === voter.votedForImposter);
-                          if (target && !target.isEliminated) {
-                            if (target.votes === undefined) target.votes = 0;
-                            target.votes++;
-                          }
-                        }
-                        if (voter.votedForOtherWord !== undefined) {
-                          const target = stateBeforeCalc.players.find(p => p.id === voter.votedForOtherWord);
-                          if (target && !target.isEliminated) {
-                            if (target.votes === undefined) target.votes = 0;
-                            target.votes++;
-                          }
-                        }
-                      } else if (voter.votedFor !== undefined) {
-                        const target = stateBeforeCalc.players.find(p => p.id === voter.votedFor);
-                        if (target && !target.isEliminated) {
-                          if (target.votes === undefined) target.votes = 0;
-                          target.votes++;
-                        }
-                      }
-                    }
-                  });
-                  
-                  console.log('[VotingPhase] Vote counts after recalculation:', stateBeforeCalc.players.map(p => ({
-                    name: p.name,
-                    votes: p.votes,
-                    isEliminated: p.isEliminated
-                  })));
-                  
                   handleCalculateResults();
                 }, 100);
               }
