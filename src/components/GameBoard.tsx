@@ -311,7 +311,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (game as any).state.eliminatedPlayer = undefined;
                 stateChanged = true;
-                console.log('[GameBoard] Server says it's a tie, clearing eliminated player');
+                console.log('[GameBoard] Server says its a tie, clearing eliminated player');
               }
             }
             
