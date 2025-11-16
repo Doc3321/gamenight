@@ -811,20 +811,26 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               }
             }
             
-            // Sync voting results from server - tie state
+            // Sync voting results from server - tie state (check FIRST before eliminated player)
             if (serverState.isTie !== undefined) {
               const shouldShowTie = serverState.isTie === true;
               if (shouldShowTie && !showTieResults) {
-                // Show tie results
+                // Show tie results - clear any eliminated player state first
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (game as any).state.eliminatedPlayer = undefined;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (game as any).state.wrongElimination = false;
+                setShowResults(false);
+                setShowWrongElimination(false);
                 setShowTieResults(true);
-                      if (serverState.tiedPlayers && Array.isArray(serverState.tiedPlayers)) {
-                        const tiedPlayersFromServer = serverState.tiedPlayers.map((tp: { id: number; name: string; votes: number }) => {
-                          const gameState = game.getState();
-                          const player = gameState.players.find(p => p.id === tp.id);
-                          return player || { id: tp.id, name: tp.name, votes: tp.votes };
-                        });
-                        setTiedPlayers(tiedPlayersFromServer);
-                      }
+                if (serverState.tiedPlayers && Array.isArray(serverState.tiedPlayers)) {
+                  const tiedPlayersFromServer = serverState.tiedPlayers.map((tp: { id: number; name: string; votes: number }) => {
+                    const gameState = game.getState();
+                    const player = gameState.players.find(p => p.id === tp.id);
+                    return player || { id: tp.id, name: tp.name, votes: tp.votes };
+                  });
+                  setTiedPlayers(tiedPlayersFromServer);
+                }
                 stateChanged = true;
               } else if (!shouldShowTie && showTieResults) {
                 // Hide tie results (revote was triggered) - this is the key fix
@@ -850,8 +856,9 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               }
             }
             
-            // Sync eliminated player state - always sync from server to ensure all clients see results
-            if (serverState.eliminatedPlayer !== undefined) {
+            // Sync eliminated player state - but only if there's no tie
+            // If there's a tie, don't show eliminated player screen
+            if (serverState.eliminatedPlayer !== undefined && !serverState.isTie) {
               if (!serverState.eliminatedPlayer || serverState.eliminatedPlayer === null) {
                 // Clear eliminated player (continue after elimination)
                 setEliminatedPlayer(null);
@@ -865,6 +872,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               } else {
                 // Always sync eliminated player from server, even if local state already shows results
                 // This ensures all clients see the same results
+                // But only if there's no tie
                 const currentState = game.getState();
                 const eliminated = currentState.players.find(p => p.id === serverState.eliminatedPlayer.id);
                 if (eliminated) {
@@ -876,9 +884,11 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                   if (serverState.wrongElimination) {
                     setShowWrongElimination(true);
                     setShowResults(false);
+                    setShowTieResults(false);
                   } else {
                     setShowResults(true);
                     setShowWrongElimination(false);
+                    setShowTieResults(false);
                     if (eliminated.wordType === 'imposter' || eliminated.wordType === 'similar') {
                       setShowConfetti(true);
                     }

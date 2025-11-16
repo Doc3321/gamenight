@@ -472,8 +472,10 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
       }
     }
     
-    if (gameState.eliminatedPlayer) {
-      // All voted and eliminated player is set, show results
+    // In online mode, let VotingPhase handle the elimination screen
+    // In local mode, show elimination screen here
+    if (gameState.eliminatedPlayer && !gameState.isOnline) {
+      // All voted and eliminated player is set, show results (local mode only)
       return (
         <div className="max-w-2xl mx-auto">
           <Card className="border-red-500 border-2">
@@ -501,9 +503,27 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
         </div>
       );
     }
+    
+    // In online mode, if there's an eliminated player, show VotingPhase which will handle the elimination screen
+    if (gameState.eliminatedPlayer && gameState.isOnline) {
+      const viewingPlayer = currentGameStateForVotingCheck.players.find(p => p.id === viewingPlayerId);
+      if (viewingPlayer && !viewingPlayer.isEliminated) {
+        return (
+          <VotingPhase
+            game={game}
+            currentPlayerId={viewingPlayerId}
+            onVoteComplete={handleVoteComplete}
+            isAdmin={isAdmin}
+            roomId={roomId}
+            currentPlayerIdString={currentPlayerIdString}
+          />
+        );
+      }
+    }
   }
 
-  if (gameState.gameCompleted) {
+  // Only show game completed screen if game is actually completed AND not in voting phase
+  if (gameState.gameCompleted && !gameState.votingPhase && !gameState.eliminatedPlayer) {
     return (
       <div className="max-w-2xl mx-auto">
         <Card>
