@@ -41,13 +41,19 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       ? (voteType === 'imposter' ? selectedImposterTarget : selectedOtherWordTarget)
       : selectedTarget;
     
-    if (!target) return;
+    if (!target) {
+      console.log('No target selected for vote');
+      return;
+    }
     
     // Prevent voting if not activated (for online mode) - check both states
     if (gameState.isOnline) {
       const currentState = game.getState();
       const isActivated = currentState.votingActivated === true || gameState.votingActivated === true;
-      if (!isActivated) return;
+      if (!isActivated) {
+        console.log('Voting not activated yet');
+        return;
+      }
     }
     
     // Prevent duplicate votes - check if player has already voted for this type
@@ -68,7 +74,15 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     const success = game.castVote(currentPlayerId, target, voteType);
     if (success) {
       const newState = game.getState();
-      setGameState(newState);
+      // Ensure votingActivated stays true after voting
+      if (newState.isOnline && !newState.votingActivated) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (game as any).state.votingActivated = true;
+        const updatedState = game.getState();
+        setGameState(updatedState);
+      } else {
+        setGameState(newState);
+      }
       
       // Sync vote to server for online games
       if (roomId && gameState.isOnline) {
@@ -470,27 +484,43 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       (game as any).state.eliminatedPlayer = undefined;
     }
     
+    // Reset all players' voting state when activating new voting round
     const updatedState = game.getState();
+    updatedState.players.forEach(p => {
+      if (!p.isEliminated) {
+        p.hasVoted = false;
+        p.votedFor = undefined;
+        p.votedForImposter = undefined;
+        p.votedForOtherWord = undefined;
+        p.votes = 0;
+      }
+    });
+    
     setGameState(updatedState);
     
-    // Sync voting activation to server for online games
+      // Sync voting activation to server for online games
     if (roomId && gameState.isOnline) {
       try {
+        // Ensure votingActivated is set to true in game state
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (game as any).state.votingActivated = true;
+        const finalState = game.getState();
+        
         await fetch('/api/rooms/game-state', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             roomId,
             gameStateData: {
-              currentPlayerIndex: updatedState.currentPlayerIndex,
-              votingPhase: updatedState.votingPhase,
+              currentPlayerIndex: finalState.currentPlayerIndex,
+              votingPhase: finalState.votingPhase,
               currentVotingPlayerIndex: 0, // Reset to first player
               votingActivated: true, // Explicitly set to true
               eliminatedPlayer: undefined, // Clear eliminated player
               wrongElimination: false,
               isTie: false,
               votes: {}, // Clear previous votes
-              playerWords: updatedState.players.reduce((acc, p) => {
+              playerWords: finalState.players.reduce((acc, p) => {
                 if (p.currentWord) {
                   acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
                 }
@@ -499,6 +529,9 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             }
           })
         });
+        
+        // Update local state after sync to ensure UI reflects the change
+        setGameState(finalState);
       } catch (error) {
         console.error('Error syncing voting activation:', error);
       }
@@ -519,24 +552,34 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             let stateChanged = false;
             
             // Sync voting activation - always sync when server has a value
+            // BUT: Don't reset to false if we're in the middle of voting (to prevent going back to activation screen)
             if (serverState.votingActivated !== undefined) {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const currentActivated = (game as any).state.votingActivated;
-              if (serverState.votingActivated !== currentActivated) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (game as any).state.votingActivated = serverState.votingActivated;
-                if (serverState.votingActivated && !gameState.votingPhase) {
+              const currentState = game.getState();
+              const hasActiveVotes = currentState.players.some(p => 
+                !p.isEliminated && (p.hasVoted || p.votedForImposter !== undefined || p.votedForOtherWord !== undefined)
+              );
+              
+              // Only sync if server says true, OR if server says false AND we don't have any active votes
+              // This prevents resetting votingActivated to false while players are still voting
+              if (serverState.votingActivated === true || (serverState.votingActivated === false && !hasActiveVotes)) {
+                if (serverState.votingActivated !== currentActivated) {
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  (game as any).state.votingPhase = true;
-                }
-                stateChanged = true;
-                // Force immediate state update when voting is activated so players can vote
-                if (serverState.votingActivated) {
-                  const updatedState = game.getState();
-                  setGameState({ 
-                    ...updatedState,
-                    players: updatedState.players.map(p => ({ ...p }))
-                  });
+                  (game as any).state.votingActivated = serverState.votingActivated;
+                  if (serverState.votingActivated && !gameState.votingPhase) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    (game as any).state.votingPhase = true;
+                  }
+                  stateChanged = true;
+                  // Force immediate state update when voting is activated so players can vote
+                  if (serverState.votingActivated) {
+                    const updatedState = game.getState();
+                    setGameState({ 
+                      ...updatedState,
+                      players: updatedState.players.map(p => ({ ...p }))
+                    });
+                  }
                 }
               }
             }
@@ -1083,8 +1126,19 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   
   // Admin activation screen (online mode only) - only show if not showing results AND no eliminated player
   // Make absolutely sure isAdmin is true - double check
+  // Also check if current player has already voted - if they have, don't show activation button
   const isVotingActivatedForAdmin = currentGameStateForRender.votingActivated === true || gameState.votingActivated === true;
-  const shouldShowAdminButton = gameState.isOnline && !isVotingActivatedForAdmin && isAdmin === true && !hasEliminatedPlayer && !hasEliminatedPlayerInState && !showResults && !showWrongElimination && !showTieResults;
+  const currentPlayerHasVoted = currentPlayer?.hasVoted || 
+    (isBothMode && currentPlayer?.votedForImposter !== undefined && currentPlayer?.votedForOtherWord !== undefined);
+  const shouldShowAdminButton = gameState.isOnline && 
+    !isVotingActivatedForAdmin && 
+    isAdmin === true && 
+    !hasEliminatedPlayer && 
+    !hasEliminatedPlayerInState && 
+    !showResults && 
+    !showWrongElimination && 
+    !showTieResults &&
+    !currentPlayerHasVoted; // Don't show if player already voted
   if (shouldShowAdminButton) {
     return (
       <div className="max-w-2xl mx-auto relative">
