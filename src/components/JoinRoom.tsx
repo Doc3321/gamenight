@@ -11,8 +11,8 @@ import ClassifiedStamp from './ClassifiedStamp';
 import AgentSpinner from './AgentSpinner';
 
 interface JoinRoomProps {
-  onJoinRoom: (roomId: string, playerName: string) => void;
-  onCreateRoom: (playerName: string) => void;
+  onJoinRoom: (roomId: string, playerName?: string) => void;
+  onCreateRoom: (playerName?: string) => void;
 }
 
 interface OpenRoom {
@@ -74,8 +74,8 @@ export default function JoinRoom({ onJoinRoom, onCreateRoom }: JoinRoomProps) {
 
     try {
       // Use nickname if available, otherwise use entered name
-      const displayName = playerName.trim() || userProfile?.nickname || '';
-      await onJoinRoom(targetRoomId.toUpperCase().trim(), displayName || undefined);
+      const displayName = playerName.trim() || userProfile?.nickname || undefined;
+      await onJoinRoom(targetRoomId.toUpperCase().trim(), displayName);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'שגיאה בהצטרפות לחדר';
       toast.error(errorMessage);
@@ -86,8 +86,8 @@ export default function JoinRoom({ onJoinRoom, onCreateRoom }: JoinRoomProps) {
     setIsCreating(true);
     try {
       // Use nickname if available, otherwise use entered name
-      const displayName = playerName.trim() || userProfile?.nickname || '';
-      await onCreateRoom(displayName || undefined);
+      const displayName = playerName.trim() || userProfile?.nickname || undefined;
+      await onCreateRoom(displayName);
     } catch {
       toast.error('שגיאה ביצירת חדר');
     } finally {

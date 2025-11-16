@@ -27,6 +27,7 @@ export default function ProfilePage() {
     if (isLoaded && user) {
       loadProfile();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded, user]);
 
   const loadProfile = async () => {
@@ -162,6 +163,7 @@ export default function ProfilePage() {
                 <div className="relative">
                   <div className="w-32 h-32 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center overflow-hidden border-4 border-purple-300 dark:border-purple-700">
                     {profilePhotoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={profilePhotoUrl}
                         alt="Profile"

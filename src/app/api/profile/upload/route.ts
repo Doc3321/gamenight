@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     const fileName = `${userId}/${Date.now()}.${fileExt}`;
 
     // Upload to Supabase Storage
-    const { data: uploadData, error: uploadError } = await adminClient.storage
+    const { error: uploadError } = await adminClient.storage
       .from('profile-photos')
       .upload(fileName, buffer, {
         contentType: file.type,

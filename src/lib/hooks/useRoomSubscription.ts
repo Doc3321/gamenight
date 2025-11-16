@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { subscribeToRoom, type BroadcastEvent } from '../realtime/broadcast';
+import { subscribeToRoom } from '../realtime/broadcast';
 import { GameRoom } from '../roomManager';
 
 export function useRoomSubscription(roomId: string | null) {
@@ -42,7 +42,7 @@ export function useRoomSubscription(roomId: string | null) {
 
     if (useBroadcast.current) {
       try {
-        unsubscribe = subscribeToRoom(normalizedRoomId, (event) => {
+        unsubscribe = subscribeToRoom(normalizedRoomId, () => {
           // Refetch room when any event occurs
           fetchRoom();
         });
