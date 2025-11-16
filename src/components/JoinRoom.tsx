@@ -34,9 +34,12 @@ export default function JoinRoom({ onJoinRoom, onCreateRoom }: JoinRoomProps) {
     fetch('/api/profile')
       .then(res => res.json())
       .then(data => {
-        if (data.profile?.nickname) {
+        if (data.profile) {
           setUserProfile(data.profile);
-          setPlayerName(data.profile.nickname);
+          // Auto-fill nickname if available
+          if (data.profile.nickname) {
+            setPlayerName(data.profile.nickname);
+          }
         }
       })
       .catch(console.error);
@@ -87,9 +90,14 @@ export default function JoinRoom({ onJoinRoom, onCreateRoom }: JoinRoomProps) {
     try {
       // Use nickname if available, otherwise use entered name
       const displayName = playerName.trim() || userProfile?.nickname || undefined;
+      if (!displayName) {
+        toast.error('נא להזין כינוי או שם');
+        return;
+      }
       await onCreateRoom(displayName);
-    } catch {
-      toast.error('שגיאה ביצירת חדר');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'שגיאה ביצירת חדר';
+      toast.error(errorMessage);
     } finally {
       setIsCreating(false);
     }

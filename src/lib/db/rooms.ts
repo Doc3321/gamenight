@@ -68,6 +68,7 @@ function dbRoomToGameRoom(dbRoom: DbRoom, players: DbPlayer[]): GameRoom {
 
 export async function createRoom(hostId: string, hostName: string): Promise<GameRoom> {
   const roomId = generateRoomId();
+  console.log('[DB] Creating room:', { roomId, hostId, hostName });
   
   const { data: room, error: roomError } = await supabaseAdmin
     .from('rooms')
@@ -79,11 +80,25 @@ export async function createRoom(hostId: string, hostName: string): Promise<Game
     .select()
     .single();
 
-  if (roomError || !room) {
-    throw new Error('Failed to create room');
+  if (roomError) {
+    console.error('[DB] Room creation error:', {
+      code: roomError.code,
+      message: roomError.message,
+      details: roomError.details,
+      hint: roomError.hint,
+    });
+    throw new Error(`Failed to create room: ${roomError.message} (Code: ${roomError.code})`);
   }
+  
+  if (!room) {
+    console.error('[DB] No room data returned after insert');
+    throw new Error('Failed to create room: No room data returned');
+  }
+  
+  console.log('[DB] Room created:', room.id);
 
   // Add host as player
+  console.log('[DB] Adding host as player:', { roomId, hostId, hostName });
   const { error: playerError } = await supabaseAdmin
     .from('room_players')
     .insert({
@@ -95,10 +110,18 @@ export async function createRoom(hostId: string, hostName: string): Promise<Game
     });
 
   if (playerError) {
+    console.error('[DB] Player insert error:', {
+      code: playerError.code,
+      message: playerError.message,
+      details: playerError.details,
+      hint: playerError.hint,
+    });
     // Cleanup room if player insert fails
     await supabaseAdmin.from('rooms').delete().eq('id', roomId);
-    throw new Error('Failed to add host to room');
+    throw new Error(`Failed to add host to room: ${playerError.message} (Code: ${playerError.code})`);
   }
+  
+  console.log('[DB] Host added as player successfully');
 
   const createdRoom = await getRoom(roomId);
   if (!createdRoom) {

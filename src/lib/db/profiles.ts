@@ -41,19 +41,31 @@ export async function createOrUpdateProfile(
   const existing = await getProfile(userId);
 
   if (existing) {
-    // Update existing profile
+    // Update existing profile - only update fields that are provided
+    const updateData: { nickname?: string; profile_photo_url?: string | null } = {};
+    
+    if (updates.nickname !== undefined) {
+      updateData.nickname = updates.nickname || null;
+    }
+    
+    if (updates.profilePhotoUrl !== undefined) {
+      updateData.profile_photo_url = updates.profilePhotoUrl || null;
+    }
+
     const { data, error } = await supabaseAdmin
       .from('user_profiles')
-      .update({
-        nickname: updates.nickname ?? existing.nickname,
-        profile_photo_url: updates.profilePhotoUrl ?? existing.profilePhotoUrl,
-      })
+      .update(updateData)
       .eq('user_id', userId)
       .select()
       .single();
 
-    if (error || !data) {
-      throw new Error('Failed to update profile');
+    if (error) {
+      console.error('Supabase update error:', error);
+      throw new Error(`Failed to update profile: ${error.message}`);
+    }
+
+    if (!data) {
+      throw new Error('Failed to update profile: No data returned');
     }
 
     return {
@@ -70,14 +82,19 @@ export async function createOrUpdateProfile(
       .from('user_profiles')
       .insert({
         user_id: userId,
-        nickname: updates.nickname,
-        profile_photo_url: updates.profilePhotoUrl,
+        nickname: updates.nickname || null,
+        profile_photo_url: updates.profilePhotoUrl || null,
       })
       .select()
       .single();
 
-    if (error || !data) {
-      throw new Error('Failed to create profile');
+    if (error) {
+      console.error('Supabase insert error:', error);
+      throw new Error(`Failed to create profile: ${error.message}`);
+    }
+
+    if (!data) {
+      throw new Error('Failed to create profile: No data returned');
     }
 
     return {

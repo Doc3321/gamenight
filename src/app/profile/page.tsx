@@ -119,11 +119,14 @@ export default function ProfilePage() {
         toast.success('הפרופיל עודכן בהצלחה');
         router.push('/');
       } else {
-        throw new Error(data.error || 'Failed to save');
+        const errorMsg = data.error || 'Failed to save';
+        console.error('Profile save error:', errorMsg);
+        throw new Error(errorMsg);
       }
     } catch (error) {
       console.error('Error saving profile:', error);
-      toast.error('שגיאה בשמירת הפרופיל');
+      const errorMessage = error instanceof Error ? error.message : 'שגיאה בשמירת הפרופיל';
+      toast.error(errorMessage);
     } finally {
       setIsSaving(false);
     }

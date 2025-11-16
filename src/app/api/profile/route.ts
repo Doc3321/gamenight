@@ -34,8 +34,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ profile });
   } catch (error) {
     console.error('Error updating profile:', error);
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (error instanceof Error) {
+      if (error.message === 'Unauthorized') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      // Return the actual error message for debugging
+      return NextResponse.json({ 
+        error: error.message || 'Failed to update profile' 
+      }, { status: 500 });
     }
     return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 });
   }
