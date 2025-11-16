@@ -1379,10 +1379,20 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     // Reset voting activation so admin needs to activate again for next round
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (game as any).state.votingActivated = false;
+    // CRITICAL: Clear voting phase state to go back to word assignment screen
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (game as any).state.votingPhase = false;
+    // Clear tie state if it exists
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (game as any).state.canRevote = false;
+    
     const updatedState = game.getState();
     setGameState(updatedState);
     setShowResults(false);
+    setShowTieResults(false);
+    setShowWrongElimination(false);
     setEliminatedPlayer(null);
+    setTiedPlayers([]);
     setSelectedTarget(null);
     setSelectedImposterTarget(null);
     setSelectedOtherWordTarget(null);
@@ -1390,6 +1400,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     // Sync continue after elimination to server
     if (roomId && gameState.isOnline) {
       try {
+        console.log('[VotingPhase] Syncing continue after elimination to server');
         await fetch('/api/rooms/game-state', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1397,11 +1408,14 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             roomId,
             gameStateData: {
               currentPlayerIndex: updatedState.currentPlayerIndex,
-              votingPhase: updatedState.votingPhase,
+              votingPhase: false, // CRITICAL: Set to false to go back to word assignment
               votingActivated: false, // Reset activation for next round
+              currentVotingPlayerIndex: 0, // Reset voting index
               wrongElimination: false,
-              eliminatedPlayer: undefined,
-              votes: {},
+              isTie: false, // Clear tie state
+              eliminatedPlayer: undefined, // Clear eliminated player
+              tiedPlayers: undefined, // Clear tied players
+              votes: {}, // Clear votes
               playerWords: updatedState.players.reduce((acc, p) => {
                 if (p.currentWord) {
                   acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
@@ -1410,6 +1424,13 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
             }
           })
+        });
+        
+        // Force state update after sync to ensure UI updates
+        const finalState = game.getState();
+        setGameState({
+          ...finalState,
+          players: finalState.players.map(p => ({ ...p }))
         });
       } catch (error) {
         console.error('Error syncing continue after elimination:', error);
