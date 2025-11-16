@@ -65,6 +65,7 @@ export const supabaseAdmin = new Proxy({} as SupabaseClient, {
       if (!client) {
         throw new Error('Supabase admin client not initialized. Check environment variables.');
       }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const value = (client as any)[prop];
       if (typeof value === 'function') {
         return value.bind(client);
