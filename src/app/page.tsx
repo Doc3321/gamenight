@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useUser } from '@clerk/nextjs';
 import { WordGame, GameMode as GameModeType } from '@/lib/gameLogic';
 import { wordTopics } from '@/data/wordTopics';
 import { Button } from '@/components/ui/button';
@@ -15,10 +16,13 @@ import { Player as GamePlayer } from '@/lib/gameLogic';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { GameRoom, Player } from '@/lib/roomManager';
 import AgentLoadingScreen from '@/components/AgentLoadingScreen';
+import { useRouter } from 'next/navigation';
 
 type AppMode = 'local' | 'online';
 
 export default function Home() {
+  const { user, isLoaded } = useUser();
+  const router = useRouter();
   const [appMode, setAppMode] = useState<AppMode>('local');
   const [game, setGame] = useState<WordGame | null>(null);
   const [selectedTopic, setSelectedTopic] = useState<string>('');
@@ -29,6 +33,21 @@ export default function Home() {
   const [room, setRoom] = useState<GameRoom | null>(null);
   const [currentPlayerId, setCurrentPlayerId] = useState<string>('');
   const [isReconnecting, setIsReconnecting] = useState(true);
+  const [userProfile, setUserProfile] = useState<{ nickname: string | null } | null>(null);
+  
+  // Load user profile
+  useEffect(() => {
+    if (isLoaded && user) {
+      fetch('/api/profile')
+        .then(res => res.json())
+        .then(data => {
+          if (data.profile) {
+            setUserProfile(data.profile);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [isLoaded, user]);
   
   useEffect(() => {
     setIsReconnecting(false);
@@ -93,21 +112,20 @@ export default function Home() {
     setCurrentPlayerId('');
   };
 
-  const createRoom = async (hostName: string) => {
+  const createRoom = async (hostName?: string) => {
     try {
-      // Generate or retrieve persistent playerId
-      let playerId = localStorage.getItem('playerId');
-      if (!playerId) {
-        playerId = `player_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-        localStorage.setItem('playerId', playerId);
+      if (!user) {
+        throw new Error('User not authenticated');
       }
+
+      // Use nickname from profile if available, otherwise use provided name or Clerk name
+      const displayName = hostName || userProfile?.nickname || user.firstName || user.username || 'Player';
       
       const response = await fetch('/api/rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          hostId: playerId,
-          hostName 
+          hostName: displayName
         })
       });
       
@@ -115,22 +133,25 @@ export default function Home() {
       if (data.room) {
         setRoom(data.room);
         setCurrentPlayerId(data.room.hostId);
-        setGameStarted(false); // Show lobby, don't start game immediately
+        setGameStarted(false);
         localStorage.setItem('roomId', data.room.id);
+      } else if (data.error) {
+        throw new Error(data.error);
       }
     } catch (error) {
       console.error('Error creating room:', error);
+      throw error;
     }
   };
 
-  const joinRoom = async (roomId: string, playerName: string) => {
+  const joinRoom = async (roomId: string, playerName?: string) => {
     try {
-      // Generate or retrieve persistent playerId
-      let playerId = localStorage.getItem('playerId');
-      if (!playerId) {
-        playerId = `player_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-        localStorage.setItem('playerId', playerId);
+      if (!user) {
+        throw new Error('User not authenticated');
       }
+
+      // Use nickname from profile if available, otherwise use provided name or Clerk name
+      const displayName = playerName || userProfile?.nickname || user.firstName || user.username || 'Player';
       
       // Normalize room ID
       const normalizedRoomId = roomId.toUpperCase().trim();
@@ -140,37 +161,35 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           roomId: normalizedRoomId,
-          playerId: playerId,
-          playerName: playerName.trim()
+          playerName: displayName.trim()
         })
       });
       
       const data = await response.json();
       
       if (!response.ok) {
-        // Show specific error message from server
         const errorMsg = data.error || 'Failed to join room';
         throw new Error(errorMsg);
       }
       
       if (data.room) {
         setRoom(data.room);
-        // Find player by ID (not by name, in case of duplicates)
-        const player = data.room.players.find((p: Player) => p.id === playerId);
+        // Find player by user ID
+        const player = data.room.players.find((p: Player) => p.id === user.id);
         if (player) {
           setCurrentPlayerId(player.id);
         } else {
           // Fallback: find by name
-          setCurrentPlayerId(data.room.players.find((p: Player) => p.name === playerName.trim())?.id || '');
+          setCurrentPlayerId(data.room.players.find((p: Player) => p.name === displayName.trim())?.id || '');
         }
-        setGameStarted(false); // Don't start game immediately, show lobby
+        setGameStarted(false);
         localStorage.setItem('roomId', data.room.id);
       } else {
         throw new Error('Room not found');
       }
     } catch (error) {
       console.error('Error joining room:', error);
-      throw error; // Re-throw to let JoinRoom component handle it
+      throw error;
     }
   };
 
@@ -269,8 +288,16 @@ export default function Home() {
   if (appMode === 'online' && !room) {
   return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 dark:from-gray-900 dark:via-purple-900 dark:to-gray-800 p-4 relative">
-        <div className="absolute top-4 left-4 z-10">
+        <div className="absolute top-4 left-4 z-10 flex gap-2">
           <ThemeToggle />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push('/profile')}
+            className="text-xs"
+          >
+            פרופיל
+          </Button>
         </div>
         <div className="max-w-4xl mx-auto">
           <motion.div

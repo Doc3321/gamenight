@@ -27,8 +27,20 @@ export default function JoinRoom({ onJoinRoom, onCreateRoom }: JoinRoomProps) {
   const [playerName, setPlayerName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [openRooms, setOpenRooms] = useState<OpenRoom[]>([]);
+  const [userProfile, setUserProfile] = useState<{ nickname: string | null } | null>(null);
 
   useEffect(() => {
+    // Load user profile for default nickname
+    fetch('/api/profile')
+      .then(res => res.json())
+      .then(data => {
+        if (data.profile?.nickname) {
+          setUserProfile(data.profile);
+          setPlayerName(data.profile.nickname);
+        }
+      })
+      .catch(console.error);
+
     // Fetch open rooms periodically
     const fetchRooms = async () => {
       try {
@@ -55,13 +67,15 @@ export default function JoinRoom({ onJoinRoom, onCreateRoom }: JoinRoomProps) {
 
   const handleJoinRoom = async (roomIdToJoin?: string) => {
     const targetRoomId = roomIdToJoin || '';
-    if (!targetRoomId || !playerName.trim()) {
-      toast.error('נא למלא את כל השדות');
+    if (!targetRoomId) {
+      toast.error('נא להזין מספר חדר');
       return;
     }
 
     try {
-      await onJoinRoom(targetRoomId.toUpperCase().trim(), playerName.trim());
+      // Use nickname if available, otherwise use entered name
+      const displayName = playerName.trim() || userProfile?.nickname || '';
+      await onJoinRoom(targetRoomId.toUpperCase().trim(), displayName || undefined);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'שגיאה בהצטרפות לחדר';
       toast.error(errorMessage);
@@ -69,14 +83,11 @@ export default function JoinRoom({ onJoinRoom, onCreateRoom }: JoinRoomProps) {
   };
 
   const handleCreateRoom = async () => {
-    if (!playerName.trim()) {
-      toast.error('נא להזין את שמך');
-      return;
-    }
-
     setIsCreating(true);
     try {
-      await onCreateRoom(playerName.trim());
+      // Use nickname if available, otherwise use entered name
+      const displayName = playerName.trim() || userProfile?.nickname || '';
+      await onCreateRoom(displayName || undefined);
     } catch {
       toast.error('שגיאה ביצירת חדר');
     } finally {
