@@ -1037,6 +1037,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               });
             }
           }
+        }
         } catch (error) {
           console.error('Error syncing game state:', error);
         }
