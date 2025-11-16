@@ -656,9 +656,22 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   useEffect(() => {
     if (!roomId || !gameState.isOnline) return;
     
+    let shouldStopPolling = false;
+    
     const syncGameState = async () => {
+      if (shouldStopPolling) return;
+      
       try {
-        const response = await fetch(`/api/rooms/game-state?roomId=${roomId}`);
+        const normalizedRoomId = roomId.toUpperCase().trim();
+        const response = await fetch(`/api/rooms/game-state?roomId=${encodeURIComponent(normalizedRoomId)}`);
+        
+        if (response.status === 404) {
+          // Room not found - stop polling to prevent repeated 404s
+          console.warn('[VotingPhase] Room not found (404) in game state sync, stopping polling:', normalizedRoomId);
+          shouldStopPolling = true;
+          return;
+        }
+        
         if (response.ok) {
           const data = await response.json();
           console.log('[VotingPhase] Full server response:', data);
@@ -1024,17 +1037,25 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               });
             }
           }
+        } catch (error) {
+          console.error('Error syncing game state:', error);
         }
-      } catch (error) {
-        console.error('Error syncing game state:', error);
-      }
-    };
-    
-    const interval = setInterval(syncGameState, 200); // Poll every 200ms for faster updates during voting
-    // Also run immediately to catch any missed updates
-    syncGameState();
-    return () => clearInterval(interval);
-  }, [roomId, gameState.isOnline, gameState.players, gameState.votingActivated, gameState.votingPhase, game, showTieResults, showResults, showWrongElimination]);
+      };
+      
+      const interval = setInterval(() => {
+        if (!shouldStopPolling) {
+          syncGameState();
+        }
+      }, 200); // Poll every 200ms for faster updates during voting
+      
+      // Also run immediately to catch any missed updates
+      syncGameState();
+      
+      return () => {
+        shouldStopPolling = true;
+        clearInterval(interval);
+      };
+    }, [roomId, gameState.isOnline, gameState.players, gameState.votingActivated, gameState.votingPhase, game, showTieResults, showResults, showWrongElimination]);
 
   useEffect(() => {
     if (!gameState.isOnline) {
@@ -1052,11 +1073,22 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       return () => clearInterval(interval);
     } else {
       // For online mode, check server state via polling
+      let shouldStopPolling = false;
+      
       const interval = setInterval(async () => {
-        if (!roomId) return;
+        if (!roomId || shouldStopPolling) return;
         
         try {
-          const response = await fetch(`/api/rooms/game-state?roomId=${roomId}`);
+          const normalizedRoomId = roomId.toUpperCase().trim();
+          const response = await fetch(`/api/rooms/game-state?roomId=${encodeURIComponent(normalizedRoomId)}`);
+          
+          if (response.status === 404) {
+            // Room not found - stop polling to prevent repeated 404s
+            console.warn('[VotingPhase] Room not found (404) in vote completion check, stopping polling:', normalizedRoomId);
+            shouldStopPolling = true;
+            return;
+          }
+          
           if (response.ok) {
             const data = await response.json();
             const serverState = data.room.gameStateData;
@@ -1192,7 +1224,10 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
         }
       }, 300); // Check every 300ms for faster detection of all votes
 
-      return () => clearInterval(interval);
+      return () => {
+        shouldStopPolling = true;
+        clearInterval(interval);
+      };
     }
   }, [game, showResults, handleCalculateResults, showTieResults, showWrongElimination, gameState.isOnline, roomId]);
 
