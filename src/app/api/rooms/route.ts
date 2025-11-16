@@ -15,9 +15,9 @@ export async function POST(request: NextRequest) {
     const room = await createRoom(userId, hostName);
     
     return NextResponse.json({ room });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error creating room:', error);
-    if (error.message === 'Unauthorized') {
+    if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     return NextResponse.json({ error: 'Failed to create room' }, { status: 500 });

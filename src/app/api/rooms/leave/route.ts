@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/supabase/auth';
 import { leaveRoom } from '@/lib/db/rooms';
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     const userId = await requireAuth();
 

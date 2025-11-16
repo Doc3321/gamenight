@@ -4,8 +4,8 @@ Add these to your `.env.local` file:
 
 ```env
 # Clerk Authentication
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
-CLERK_SECRET_KEY=sk_test_...
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_ZXhhY3QtZm93bC0yMi5jbGVyay5hY2NvdW50cy5kZXYk
+CLERK_SECRET_KEY=sk_test_XWcviaonRCIGjh3TBg43K2qLyzIm2QQDvRC0JZmYDs
 
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co

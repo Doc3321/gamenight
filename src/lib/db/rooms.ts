@@ -1,8 +1,50 @@
 import { supabaseAdmin } from '../supabase/server';
-import { GameRoom, Player, GameMode } from '../roomManager';
+import { GameRoom, GameMode } from '../roomManager';
+
+// Database row types
+interface DbRoom {
+  id: string;
+  host_id: string;
+  game_state: 'waiting' | 'playing' | 'finished';
+  current_topic?: string | null;
+  game_word?: string | null;
+  game_mode?: string | null;
+  current_spin: number;
+  total_spins: number;
+  spin_order?: unknown;
+  player_order?: unknown;
+  created_at: string;
+  updated_at: string;
+}
+
+interface DbPlayer {
+  id: string;
+  room_id: string;
+  user_id: string;
+  player_name: string;
+  is_host: boolean;
+  is_ready: boolean;
+  player_index?: number | null;
+  created_at: string;
+}
+
+interface DbGameState {
+  current_player_index?: number | null;
+  current_spin?: number | null;
+  voting_phase?: boolean | null;
+  current_voting_player_index?: number | null;
+  voting_activated?: boolean | null;
+  eliminated_player?: unknown;
+  is_tie?: boolean | null;
+  tied_players?: unknown;
+  wrong_elimination?: boolean | null;
+  player_words?: unknown;
+  votes?: unknown;
+  emotes?: unknown;
+}
 
 // Convert database room to GameRoom format
-function dbRoomToGameRoom(dbRoom: any, players: any[]): GameRoom {
+function dbRoomToGameRoom(dbRoom: DbRoom, players: DbPlayer[]): GameRoom {
   return {
     id: dbRoom.id,
     hostId: dbRoom.host_id,
@@ -18,8 +60,8 @@ function dbRoomToGameRoom(dbRoom: any, players: any[]): GameRoom {
     gameMode: dbRoom.game_mode as GameMode | undefined,
     currentSpin: dbRoom.current_spin || 0,
     totalSpins: dbRoom.total_spins || 3,
-    spinOrder: dbRoom.spin_order || [],
-    playerOrder: dbRoom.player_order || undefined,
+    spinOrder: (dbRoom.spin_order as (boolean | 'similar' | 'imposter')[]) || [],
+    playerOrder: (dbRoom.player_order as string[] | undefined) || undefined,
     createdAt: new Date(dbRoom.created_at),
   };
 }
@@ -58,7 +100,11 @@ export async function createRoom(hostId: string, hostName: string): Promise<Game
     throw new Error('Failed to add host to room');
   }
 
-  return getRoom(roomId)!;
+  const createdRoom = await getRoom(roomId);
+  if (!createdRoom) {
+    throw new Error('Failed to retrieve created room');
+  }
+  return createdRoom;
 }
 
 export async function getRoom(roomId: string): Promise<GameRoom | null> {
@@ -93,19 +139,20 @@ export async function getRoom(roomId: string): Promise<GameRoom | null> {
   const gameRoom = dbRoomToGameRoom(room, players || []);
   
   if (gameState) {
+    const dbState = gameState as unknown as DbGameState;
     gameRoom.gameStateData = {
-      currentPlayerIndex: gameState.current_player_index || 0,
-      currentSpin: gameState.current_spin,
-      votingPhase: gameState.voting_phase || false,
-      currentVotingPlayerIndex: gameState.current_voting_player_index,
-      votingActivated: gameState.voting_activated || false,
-      eliminatedPlayer: gameState.eliminated_player,
-      isTie: gameState.is_tie,
-      tiedPlayers: gameState.tied_players,
-      wrongElimination: gameState.wrong_elimination,
-      playerWords: gameState.player_words,
-      votes: gameState.votes,
-      emotes: gameState.emotes,
+      currentPlayerIndex: dbState.current_player_index || 0,
+      currentSpin: dbState.current_spin ?? undefined,
+      votingPhase: dbState.voting_phase || false,
+      currentVotingPlayerIndex: dbState.current_voting_player_index ?? undefined,
+      votingActivated: dbState.voting_activated || false,
+      eliminatedPlayer: dbState.eliminated_player as { id: number; name: string; wordType?: 'normal' | 'similar' | 'imposter'; votes?: number } | undefined,
+      isTie: dbState.is_tie ?? undefined,
+      tiedPlayers: dbState.tied_players as Array<{ id: number; name: string; votes: number }> | undefined,
+      wrongElimination: dbState.wrong_elimination ?? undefined,
+      playerWords: dbState.player_words as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }> | undefined,
+      votes: dbState.votes as Record<string, { voterId: number; targetId: number; voteType?: 'imposter' | 'other-word' }> | undefined,
+      emotes: dbState.emotes as Array<{ playerId: number; emote: string; timestamp: number }> | undefined,
     };
   }
 
@@ -355,9 +402,24 @@ export async function startGame(
   return getRoom(normalizedRoomId);
 }
 
+export interface GameStateData {
+  currentPlayerIndex?: number;
+  currentSpin?: number;
+  votingPhase?: boolean;
+  currentVotingPlayerIndex?: number;
+  votingActivated?: boolean;
+  eliminatedPlayer?: unknown;
+  isTie?: boolean;
+  tiedPlayers?: unknown;
+  wrongElimination?: boolean;
+  playerWords?: unknown;
+  votes?: unknown;
+  emotes?: unknown;
+}
+
 export async function updateGameState(
   roomId: string,
-  gameStateData: any
+  gameStateData: GameStateData
 ): Promise<void> {
   const normalizedRoomId = roomId.toUpperCase().trim();
 
@@ -434,8 +496,9 @@ function shuffleArray<T>(array: T[]): T[] {
 
 function getWordsForTopic(topic: string): string[] {
   // Import wordTopics dynamically to avoid circular dependency
-  const { wordTopics } = require('@/data/wordTopics');
-  const topicData = wordTopics.find((t: any) => t.id === topic);
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { wordTopics } = require('@/data/wordTopics') as { wordTopics: Array<{ id: string; words: string[] }> };
+  const topicData = wordTopics.find((t) => t.id === topic);
   return topicData?.words || [];
 }
 

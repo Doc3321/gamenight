@@ -1,17 +1,47 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+// Lazy initialization to avoid errors during build
+let supabaseAdminInstance: SupabaseClient | null = null;
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error('Missing Supabase environment variables');
+function getSupabaseAdmin(): SupabaseClient {
+  if (supabaseAdminInstance) {
+    return supabaseAdminInstance;
+  }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    // During build, create a client with placeholder values
+    // It will fail at runtime if env vars are missing, but allows build to complete
+    supabaseAdminInstance = createClient(
+      'https://placeholder.supabase.co',
+      'placeholder-key',
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    ) as SupabaseClient;
+    return supabaseAdminInstance;
+  }
+
+  supabaseAdminInstance = createClient(supabaseUrl, supabaseServiceKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+
+  return supabaseAdminInstance;
 }
 
 // Server-side client with service role key (bypasses RLS)
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
+// Lazy-loaded to avoid build-time errors
+export const supabaseAdmin = {
+  get from() {
+    return getSupabaseAdmin().from;
   },
-});
+} as SupabaseClient;
 

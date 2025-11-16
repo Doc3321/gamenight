@@ -21,18 +21,26 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return (
-    <ClerkProvider>
-      <html lang="he" dir="rtl" suppressHydrationWarning>
-        <body
-          className={`${heebo.variable} font-hebrew antialiased`}
-        >
-          <ThemeProvider defaultTheme="system" storageKey="soken-theme">
-            {children}
-            <Toaster position="top-center" richColors />
-          </ThemeProvider>
-        </body>
-      </html>
-    </ClerkProvider>
+  const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  const hasValidClerkKey = clerkPublishableKey && clerkPublishableKey.startsWith('pk_');
+
+  const content = (
+    <html lang="he" dir="rtl" suppressHydrationWarning>
+      <body
+        className={`${heebo.variable} font-hebrew antialiased`}
+      >
+        <ThemeProvider defaultTheme="system" storageKey="soken-theme">
+          {children}
+          <Toaster position="top-center" richColors />
+        </ThemeProvider>
+      </body>
+    </html>
   );
+
+  if (hasValidClerkKey) {
+    return <ClerkProvider publishableKey={clerkPublishableKey}>{content}</ClerkProvider>;
+  }
+
+  // During build or when Clerk is not configured, render without ClerkProvider
+  return content;
 }
