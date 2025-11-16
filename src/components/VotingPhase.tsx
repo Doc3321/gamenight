@@ -609,12 +609,20 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (game as any).state.currentVotingPlayerIndex = serverState.currentVotingPlayerIndex;
                 stateChanged = true;
-                // Force immediate state update when voting index changes
+                // Force immediate state update when voting index changes so next player can vote
                 const updatedState = game.getState();
                 setGameState({ 
                   ...updatedState,
                   players: updatedState.players.map(p => ({ ...p }))
                 });
+                // Also force a re-render by updating component state
+                setTimeout(() => {
+                  const freshState = game.getState();
+                  setGameState({ 
+                    ...freshState,
+                    players: freshState.players.map(p => ({ ...p }))
+                  });
+                }, 100);
               }
             }
             
@@ -1241,7 +1249,10 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   const playersToShow = activePlayers.filter(p => p.id !== currentPlayerId);
   
   // For online mode: Check if it's this player's turn to vote (sequential voting like word-getting)
-  const currentVotingIndex = currentGameStateForRender.currentVotingPlayerIndex ?? 0;
+  // Get currentVotingPlayerIndex directly from game state to ensure we have the latest value
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const gameInternalVotingIndex = (game as any).state.currentVotingPlayerIndex ?? 0;
+  const currentVotingIndex = gameInternalVotingIndex !== undefined ? gameInternalVotingIndex : (currentGameStateForRender.currentVotingPlayerIndex ?? 0);
   const activePlayersForVoting = currentGameStateForRender.players.filter(p => !p.isEliminated);
   const isMyTurnToVote = gameState.isOnline 
     ? (currentVotingIndex < activePlayersForVoting.length && activePlayersForVoting[currentVotingIndex]?.id === currentPlayerId)
