@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useUser, useClerk } from '@clerk/nextjs';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 export function HeaderMenu() {
   const [isOpen, setIsOpen] = useState(false);
@@ -90,6 +91,11 @@ export function HeaderMenu() {
                   פרופיל
                 </Button>
               )}
+
+              <div className="pt-2 border-t border-purple-200 dark:border-purple-800 flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">ערכת נושא</span>
+                <ThemeToggle />
+              </div>
 
               {user && (
                 <Button
