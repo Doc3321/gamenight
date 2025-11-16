@@ -234,8 +234,22 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                     player.currentWord = wordDataTyped.word;
                     player.wordType = wordDataTyped.type;
                     stateChanged = true;
+                    console.log('[GameBoard] Updated player word:', { playerId, word: wordDataTyped.word });
                   }
+                } else if (!player) {
+                  console.warn('[GameBoard] Player not found for word sync:', playerId);
                 }
+              });
+            } else {
+              console.log('[GameBoard] No playerWords in server state');
+            }
+            
+            // Force state update if player words changed to ensure UI reflects the change
+            if (stateChanged) {
+              const updatedState = game.getState();
+              setGameState({ 
+                ...updatedState,
+                players: updatedState.players.map(p => ({ ...p }))
               });
             }
             
@@ -347,6 +361,18 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
   const allPlayersHaveSpun = currentGameStateForVoting.currentPlayerIndex >= currentGameStateForVoting.players.length;
   // Verify all players actually have words assigned (critical check)
   const allPlayersHaveWordsAssigned = currentGameStateForVoting.players.every(p => p.currentWord !== undefined);
+  
+  // Debug logging to help identify the issue
+  if (gameState.isOnline) {
+    console.log('[GameBoard] Voting phase check:', {
+      currentPlayerIndex: currentGameStateForVoting.currentPlayerIndex,
+      playersLength: currentGameStateForVoting.players.length,
+      allPlayersHaveSpun,
+      allPlayersHaveWordsAssigned,
+      stillSpinning: currentGameStateForVoting.currentPlayerIndex < currentGameStateForVoting.players.length,
+      playerWords: currentGameStateForVoting.players.map(p => ({ id: p.id, name: p.name, hasWord: !!p.currentWord, word: p.currentWord }))
+    });
+  }
   
   // CRITICAL: Only show voting phase if ALL players have spun AND all have words assigned
   // This ensures the last player has gotten their word before voting starts
