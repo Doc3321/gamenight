@@ -45,3 +45,6 @@ export const supabaseAdmin = {
   },
 } as SupabaseClient;
 
+// Export the function for broadcast use
+export { getSupabaseAdmin };
+

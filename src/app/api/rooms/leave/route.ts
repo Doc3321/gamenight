@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/supabase/auth';
 import { leaveRoom } from '@/lib/db/rooms';
+import { broadcastEvent } from '@/lib/realtime/broadcast';
 
 export async function POST() {
   try {
@@ -9,6 +10,9 @@ export async function POST() {
     const room = await leaveRoom(userId);
     
     if (room) {
+      // Broadcast update
+      await broadcastEvent(room.id, { type: 'player-left', roomId: room.id, playerId: userId });
+      await broadcastEvent(room.id, { type: 'room-updated', roomId: room.id });
       return NextResponse.json({ room });
     }
 

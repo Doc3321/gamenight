@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/supabase/auth';
 import { updatePlayerReady, getRoom } from '@/lib/db/rooms';
+import { broadcastEvent } from '@/lib/realtime/broadcast';
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,6 +28,10 @@ export async function POST(request: NextRequest) {
     if (!updatedRoom) {
       return NextResponse.json({ error: 'Failed to update ready status' }, { status: 500 });
     }
+
+    // Broadcast update
+    await broadcastEvent(roomId, { type: 'player-ready', roomId, playerId: userId, isReady });
+    await broadcastEvent(roomId, { type: 'room-updated', roomId });
 
     return NextResponse.json({ room: updatedRoom });
   } catch (error) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, isUserInRoom } from '@/lib/supabase/auth';
 import { addEmote, getRoom } from '@/lib/db/rooms';
+import { broadcastEvent } from '@/lib/realtime/broadcast';
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,6 +24,10 @@ export async function POST(request: NextRequest) {
     }
 
     await addEmote(roomId, userId, emote);
+    
+    // Broadcast emote
+    await broadcastEvent(roomId, { type: 'emote-sent', roomId, playerId: userId, emote });
+    await broadcastEvent(roomId, { type: 'game-state-updated', roomId });
     
     const updatedRoom = await getRoom(roomId);
     return NextResponse.json({ room: updatedRoom });

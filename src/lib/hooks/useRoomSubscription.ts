@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '../supabase/client';
+import { useEffect, useState, useRef } from 'react';
+import { subscribeToRoom, type BroadcastEvent } from '../realtime/broadcast';
 import { GameRoom } from '../roomManager';
 
 export function useRoomSubscription(roomId: string | null) {
   const [room, setRoom] = useState<GameRoom | null>(null);
   const [loading, setLoading] = useState(true);
+  const useBroadcast = useRef(true);
 
   useEffect(() => {
     if (!roomId) {
@@ -16,7 +17,7 @@ export function useRoomSubscription(roomId: string | null) {
     const normalizedRoomId = roomId.toUpperCase().trim();
     setLoading(true);
 
-    // Initial fetch
+    // Fetch room data
     const fetchRoom = async () => {
       try {
         const response = await fetch(`/api/rooms?roomId=${normalizedRoomId}`);
@@ -35,58 +36,52 @@ export function useRoomSubscription(roomId: string | null) {
 
     fetchRoom();
 
-    // Subscribe to room changes
-    const roomChannel = supabase
-      .channel(`room:${normalizedRoomId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'rooms',
-          filter: `id=eq.${normalizedRoomId}`,
-        },
-        () => {
-          // Refetch room when it changes
-          fetchRoom();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'room_players',
-          filter: `room_id=eq.${normalizedRoomId}`,
-        },
-        () => {
-          // Refetch room when players change
-          fetchRoom();
-        }
-      )
-      .subscribe();
+    // Try broadcast-based real-time (works on free tier!)
+    let unsubscribe: (() => void) | null = null;
+    let pollInterval: NodeJS.Timeout | null = null;
 
-    // Subscribe to game state changes
-    const gameStateChannel = supabase
-      .channel(`game-state:${normalizedRoomId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'game_states',
-          filter: `room_id=eq.${normalizedRoomId}`,
-        },
-        () => {
-          // Refetch room to get updated game state
+    if (useBroadcast.current) {
+      try {
+        unsubscribe = subscribeToRoom(normalizedRoomId, (event) => {
+          // Refetch room when any event occurs
           fetchRoom();
-        }
-      )
-      .subscribe();
+        });
+
+        // Fallback to polling if broadcast doesn't work after 3 seconds
+        const fallbackTimeout = setTimeout(() => {
+          if (unsubscribe) {
+            console.warn('[useRoomSubscription] Broadcast timeout, using polling');
+            unsubscribe();
+            unsubscribe = null;
+            useBroadcast.current = false;
+            
+            // Start polling
+            pollInterval = setInterval(fetchRoom, 2000);
+          }
+        }, 3000);
+
+        return () => {
+          clearTimeout(fallbackTimeout);
+          if (unsubscribe) unsubscribe();
+          if (pollInterval) clearInterval(pollInterval);
+        };
+      } catch (error) {
+        console.warn('[useRoomSubscription] Broadcast error, using polling:', error);
+        useBroadcast.current = false;
+      }
+    }
+
+    // Fallback to polling
+    if (!useBroadcast.current || !unsubscribe) {
+      pollInterval = setInterval(fetchRoom, 2000);
+      return () => {
+        if (pollInterval) clearInterval(pollInterval);
+      };
+    }
 
     return () => {
-      roomChannel.unsubscribe();
-      gameStateChannel.unsubscribe();
+      if (unsubscribe) unsubscribe();
+      if (pollInterval) clearInterval(pollInterval);
     };
   }, [roomId]);
 

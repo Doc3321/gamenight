@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, isUserInRoom } from '@/lib/supabase/auth';
 import { getRoom, updateGameState } from '@/lib/db/rooms';
+import { broadcastEvent } from '@/lib/realtime/broadcast';
 
 export async function GET(request: NextRequest) {
   try {
@@ -48,6 +49,9 @@ export async function POST(request: NextRequest) {
     }
 
     await updateGameState(roomId, gameStateData);
+    
+    // Broadcast game state update
+    await broadcastEvent(roomId, { type: 'game-state-updated', roomId });
     
     const updatedRoom = await getRoom(roomId);
     return NextResponse.json({ room: updatedRoom });

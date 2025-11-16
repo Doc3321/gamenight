@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, isUserHost } from '@/lib/supabase/auth';
 import { startGame, getRoom } from '@/lib/db/rooms';
+import { broadcastEvent } from '@/lib/realtime/broadcast';
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,6 +29,10 @@ export async function POST(request: NextRequest) {
     if (!startedRoom) {
       return NextResponse.json({ error: 'Failed to start game' }, { status: 400 });
     }
+
+    // Broadcast game started
+    await broadcastEvent(roomId, { type: 'game-started', roomId });
+    await broadcastEvent(roomId, { type: 'room-updated', roomId });
 
     return NextResponse.json({ room: startedRoom });
   } catch (error) {

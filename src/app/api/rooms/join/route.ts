@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/supabase/auth';
 import { joinRoom, leaveRoom, getRoom } from '@/lib/db/rooms';
+import { broadcastEvent } from '@/lib/realtime/broadcast';
 
 export async function POST(request: NextRequest) {
   try {
@@ -43,6 +44,10 @@ export async function POST(request: NextRequest) {
       }
       return NextResponse.json({ error: 'לא ניתן להצטרף לחדר' }, { status: 400 });
     }
+
+    // Broadcast update to all clients
+    await broadcastEvent(roomId, { type: 'player-joined', roomId, playerId: userId });
+    await broadcastEvent(roomId, { type: 'room-updated', roomId });
 
     return NextResponse.json({ room });
   } catch (error) {
