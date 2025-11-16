@@ -70,6 +70,17 @@ export async function createRoom(hostId: string, hostName: string): Promise<Game
   const roomId = generateRoomId();
   console.log('[DB] Creating room:', { roomId, hostId, hostName });
   
+  // Verify supabaseAdmin is accessible
+  try {
+    const testQuery = supabaseAdmin.from('rooms');
+    if (!testQuery) {
+      throw new Error('supabaseAdmin.from is not accessible');
+    }
+  } catch (error) {
+    console.error('[DB] supabaseAdmin access error:', error);
+    throw new Error(`Supabase client not initialized: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+  
   const { data: room, error: roomError } = await supabaseAdmin
     .from('rooms')
     .insert({
@@ -95,7 +106,7 @@ export async function createRoom(hostId: string, hostName: string): Promise<Game
     throw new Error('Failed to create room: No room data returned');
   }
   
-  console.log('[DB] Room created:', room.id);
+  console.log('[DB] Room created successfully:', room.id);
 
   // Add host as player
   console.log('[DB] Adding host as player:', { roomId, hostId, hostName });
@@ -104,7 +115,7 @@ export async function createRoom(hostId: string, hostName: string): Promise<Game
     .insert({
       room_id: roomId,
       user_id: hostId,
-      player_name: hostName,
+      player_name: hostName.trim(),
       is_host: true,
       is_ready: false,
     });
@@ -127,6 +138,14 @@ export async function createRoom(hostId: string, hostName: string): Promise<Game
   if (!createdRoom) {
     throw new Error('Failed to retrieve created room');
   }
+  
+  console.log('[DB] Room creation complete:', {
+    roomId: createdRoom.id,
+    hostId: createdRoom.hostId,
+    players: createdRoom.players.length,
+    hostName: createdRoom.players.find(p => p.isHost)?.name
+  });
+  
   return createdRoom;
 }
 
@@ -281,6 +300,9 @@ export async function leaveRoom(userId: string): Promise<GameRoom | null> {
     return null;
   }
 
+  const isHost = player.isHost;
+  const isOnlyPlayer = room.players.length === 1;
+
   // Remove player
   await supabaseAdmin
     .from('room_players')
@@ -289,7 +311,7 @@ export async function leaveRoom(userId: string): Promise<GameRoom | null> {
     .eq('user_id', userId);
 
   // If host left and there are other players, assign new host
-  if (player.isHost && room.players.length > 1) {
+  if (isHost && room.players.length > 1) {
     const remainingPlayers = room.players.filter(p => p.id !== userId);
     if (remainingPlayers.length > 0) {
       await supabaseAdmin
@@ -305,16 +327,14 @@ export async function leaveRoom(userId: string): Promise<GameRoom | null> {
     }
   }
 
-  // If no players left, delete room after 5 minutes (handled by cleanup job)
+  // If no players left (or host was the only player), delete room immediately
   const updatedRoom = await getRoom(roomId);
   if (updatedRoom && updatedRoom.players.length === 0) {
-    // Schedule cleanup - in production, use a cron job
-    setTimeout(async () => {
-      const checkRoom = await getRoom(roomId);
-      if (checkRoom && checkRoom.players.length === 0) {
-        await supabaseAdmin.from('rooms').delete().eq('id', roomId);
-      }
-    }, 5 * 60 * 1000);
+    console.log('[DB] Deleting empty room:', roomId);
+    await supabaseAdmin.from('rooms').delete().eq('id', roomId);
+    await supabaseAdmin.from('room_players').delete().eq('room_id', roomId);
+    await supabaseAdmin.from('game_states').delete().eq('room_id', roomId);
+    return null;
   }
 
   return updatedRoom;

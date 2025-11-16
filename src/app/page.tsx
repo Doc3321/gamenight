@@ -123,12 +123,14 @@ export default function Home() {
         throw new Error('User not authenticated');
       }
 
-      // Use nickname from profile if available, otherwise use provided name or Clerk name
-      const displayName = hostName || userProfile?.nickname || user.firstName || user.username || 'Player';
+      // Use provided name first, then nickname from profile, then Clerk name
+      const displayName = hostName?.trim() || userProfile?.nickname?.trim() || user.firstName?.trim() || user.username?.trim() || 'Player';
       
       if (!displayName || !displayName.trim()) {
         throw new Error('נא להזין שם או כינוי');
       }
+      
+      console.log('[Client] Creating room with displayName:', displayName);
       
       const response = await fetch('/api/rooms', {
         method: 'POST',
@@ -142,19 +144,22 @@ export default function Home() {
       
       if (!response.ok) {
         const errorMsg = data.error || 'Failed to create room';
+        console.error('[Client] Room creation failed:', errorMsg);
         throw new Error(errorMsg);
       }
       
       if (data.room) {
+        console.log('[Client] Room created successfully:', data.room.id);
         setRoom(data.room);
         setCurrentPlayerId(data.room.hostId);
         setGameStarted(false);
         localStorage.setItem('roomId', data.room.id);
       } else {
+        console.error('[Client] Room not returned from server');
         throw new Error('Room not returned from server');
       }
     } catch (error) {
-      console.error('Error creating room:', error);
+      console.error('[Client] Error creating room:', error);
       throw error;
     }
   };
