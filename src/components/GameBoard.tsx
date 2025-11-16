@@ -523,7 +523,8 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
   }
 
   // Only show game completed screen if game is actually completed AND not in voting phase
-  if (gameState.gameCompleted && !gameState.votingPhase && !gameState.eliminatedPlayer) {
+  if (gameState.gameCompleted && !gameState.votingPhase) {
+    const eliminatedPlayer = gameState.eliminatedPlayer;
     return (
       <div className="max-w-2xl mx-auto">
         <Card>
@@ -532,10 +533,10 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
           </CardHeader>
           <CardContent className="text-center space-y-4">
             <p className="text-lg">סיימת את כל הסיבובים</p>
-            {gameState.eliminatedPlayer && (
+            {eliminatedPlayer && (
               <div className="p-4 bg-red-50 rounded-lg">
                 <p className="text-red-600 font-semibold">
-                  השחקן שהודח: {gameState.eliminatedPlayer.name}
+                  השחקן שהודח: {eliminatedPlayer.name}
                 </p>
               </div>
             )}
