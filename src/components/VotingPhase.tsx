@@ -726,13 +726,19 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                 
                 // Only reset voting status for players who don't have votes on the server
                 // This prevents clearing votes that are in the process of being synced
+                // CRITICAL: Don't reset if player already has voted locally - preserve their vote
                 currentState.players.forEach(p => {
                   if (!p.isEliminated && !playersWithServerVotes.has(p.id)) {
-                    // Only reset if this player doesn't have a vote on the server
-                    p.hasVoted = false;
-                    p.votedFor = undefined;
-                    p.votedForImposter = undefined;
-                    p.votedForOtherWord = undefined;
+                    // Only reset if this player doesn't have a vote on the server AND doesn't have a vote locally
+                    // This prevents clearing the admin's vote after they vote
+                    const hasLocalVote = p.hasVoted || p.votedFor !== undefined || 
+                                       p.votedForImposter !== undefined || p.votedForOtherWord !== undefined;
+                    if (!hasLocalVote) {
+                      p.hasVoted = false;
+                      p.votedFor = undefined;
+                      p.votedForImposter = undefined;
+                      p.votedForOtherWord = undefined;
+                    }
                   }
                 });
                 
@@ -1335,7 +1341,11 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   const canVote = !hasVoted && (!gameState.isOnline || (isVotingActivatedForVote && isMyTurnToVote));
   
   // Show waiting screen if it's not my turn to vote (online mode only)
-  if (gameState.isOnline && !isMyTurnToVote && currentVotingIndex < activePlayersForVoting.length) {
+  // BUT: Don't show waiting screen if I've already voted - show "voted" status instead
+  const hasVotedForDisplay = currentPlayer?.hasVoted || 
+    (isBothMode && currentPlayer?.votedForImposter !== undefined && currentPlayer?.votedForOtherWord !== undefined);
+  
+  if (gameState.isOnline && !isMyTurnToVote && currentVotingIndex < activePlayersForVoting.length && !hasVotedForDisplay) {
     const currentVotingPlayer = activePlayersForVoting[currentVotingIndex];
     return (
       <div className="max-w-2xl mx-auto relative">
@@ -1377,6 +1387,63 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                   <div className={`w-2 h-2 rounded-full ${player.hasVoted ? 'bg-green-500' : 'bg-orange-500'}`} />
                 </div>
               ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  
+  // Show "already voted" screen if player has voted but it's not their turn anymore
+  if (gameState.isOnline && !isMyTurnToVote && hasVotedForDisplay && currentVotingIndex < activePlayersForVoting.length) {
+    const currentVotingPlayer = activePlayersForVoting[currentVotingIndex];
+    return (
+      <div className="max-w-2xl mx-auto relative">
+        <ClassifiedStamp level="SECRET" />
+        <AgentScanLine />
+        <Card className="relative overflow-hidden border-2 border-green-500/30 dark:border-green-400/50">
+          <CardHeader className="text-center">
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <CardTitle className="text-2xl font-mono tracking-wider bg-gradient-to-r from-green-600 to-emerald-500 bg-clip-text text-transparent">
+                הצבעת
+              </CardTitle>
+              <p className="text-xs text-muted-foreground uppercase tracking-widest mt-2">
+                VOTE CAST
+              </p>
+            </motion.div>
+          </CardHeader>
+          <CardContent className="text-center space-y-6">
+            <div className="space-y-2">
+              <p className="text-green-600 font-semibold">✓ הצבעת בהצלחה</p>
+              <p className="text-muted-foreground">
+                ממתין לשחקנים אחרים להצביע...
+              </p>
+              {currentVotingPlayer && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  תור של: <span className="font-bold">{currentVotingPlayer.name}</span>
+                </p>
+              )}
+            </div>
+            {/* Show vote status for all players */}
+            <div className="flex justify-center gap-4 mt-4">
+              {activePlayersForVoting.map((player) => {
+                const playerVoted = isBothMode
+                  ? player.hasVoted && player.votedForImposter !== undefined && player.votedForOtherWord !== undefined
+                  : player.hasVoted;
+                return (
+                  <div key={player.id} className="flex flex-col items-center gap-1">
+                    <PlayerAvatar 
+                      name={player.name} 
+                      size="sm" 
+                      isActive={player.id === currentVotingPlayer?.id}
+                    />
+                    <div className={`w-2 h-2 rounded-full ${playerVoted ? 'bg-green-500' : 'bg-orange-500'}`} />
+                  </div>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
