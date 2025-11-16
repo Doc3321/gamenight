@@ -1123,26 +1123,22 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             return;
           }
           
+          // CRITICAL: Check for eliminated player immediately - don't wait for vote checking
           if (response.ok) {
             const data = await response.json();
-            const serverState = data.room.gameStateData;
+            const serverState = data.room?.gameStateData;
             
-            // If server already has results (eliminatedPlayer or isTie), use server's result instead of recalculating
-            // This ensures all clients see the same result
-            if (serverState.eliminatedPlayer !== undefined && serverState.eliminatedPlayer !== null) {
-              // Server has elimination result - sync it to local state
-              console.log('[VotingPhase] Server has elimination result, syncing:', serverState.eliminatedPlayer);
+            // If server has eliminated player, sync it immediately
+            if (serverState?.eliminatedPlayer !== undefined && serverState.eliminatedPlayer !== null) {
               const currentState = game.getState();
               const eliminated = currentState.players.find(p => p.id === serverState.eliminatedPlayer.id);
-              if (eliminated) {
+              if (eliminated && !eliminated.isEliminated) {
                 eliminated.isEliminated = true;
                 eliminated.votes = serverState.eliminatedPlayer.votes || 0;
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (game as any).state.eliminatedPlayer = eliminated;
-                if (serverState.wrongElimination !== undefined) {
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  (game as any).state.wrongElimination = serverState.wrongElimination;
-                }
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (game as any).state.votingPhase = true;
                 setEliminatedPlayer(eliminated);
                 if (serverState.wrongElimination) {
                   setShowWrongElimination(true);
@@ -1158,13 +1154,12 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                 }
                 const updatedState = game.getState();
                 setGameState(updatedState);
+                return; // Don't check votes if we already have results
               }
-              return;
             }
             
-            // If server says it's a tie, use that result
-            if (serverState.isTie === true) {
-              console.log('[VotingPhase] Server says its a tie, syncing tie result');
+            // If server says it's a tie, sync it immediately
+            if (serverState?.isTie === true) {
               setShowTieResults(true);
               setShowResults(false);
               setShowWrongElimination(false);
@@ -1176,10 +1171,19 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                 });
                 setTiedPlayers(tiedPlayersFromServer);
               }
-              return;
+              return; // Don't check votes if we already have tie results
             }
+          }
+          
+          if (response.ok) {
+            const data = await response.json();
+            const serverState = data.room.gameStateData;
             
-            if (serverState.votes) {
+            // Note: eliminatedPlayer and isTie checks are already done above, so skip them here
+            // Continue to vote checking logic below
+            
+            // Only check votes if we don't already have results
+            if (serverState.votes && !serverState.eliminatedPlayer && !serverState.isTie) {
               const serverVotes = serverState.votes;
               const currentState = game.getState();
               const activePlayers = currentState.players.filter(p => !p.isEliminated);
@@ -1358,7 +1362,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
         } catch (error) {
           console.error('Error checking voting completion:', error);
         }
-      }, 150); // Check every 150ms for faster detection of all votes
+      }, 100); // Check every 100ms for faster detection of all votes and results
 
       return () => {
         shouldStopPolling = true;

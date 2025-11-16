@@ -329,7 +329,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
       } catch (error) {
         console.error('Error polling game state:', error);
       }
-    }, 300); // Poll every 300ms for faster updates
+    }, 150); // Poll every 150ms for faster updates and result sync
     
     return () => clearInterval(pollInterval);
   }, [gameState.isOnline, roomId, game]);
@@ -392,6 +392,24 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
   
   // CRITICAL: Only show voting phase if ALL players have spun AND all have words assigned
   // This ensures the last player has gotten their word before voting starts
+  // CRITICAL: Check for eliminated player FIRST - if there's an eliminated player, show results screen
+  // This prevents showing "Start Voting" screen when results are already available
+  if (currentGameStateForVoting.eliminatedPlayer && gameState.isOnline && viewingPlayerId !== undefined) {
+    const viewingPlayer = currentGameStateForVoting.players.find(p => p.id === viewingPlayerId);
+    if (viewingPlayer && !viewingPlayer.isEliminated) {
+      return (
+        <VotingPhase
+          game={game}
+          currentPlayerId={viewingPlayerId}
+          onVoteComplete={handleVoteComplete}
+          isAdmin={isAdmin}
+          roomId={roomId}
+          currentPlayerIdString={currentPlayerIdString}
+        />
+      );
+    }
+  }
+  
   // Also check that we're not still in the spinning phase (currentPlayerIndex < players.length means someone still needs to spin)
   const stillSpinning = currentGameStateForVoting.currentPlayerIndex < currentGameStateForVoting.players.length;
   if (!stillSpinning && allPlayersHaveSpun && allPlayersHaveWordsAssigned) {
