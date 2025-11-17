@@ -1260,7 +1260,9 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   (game as any).state.votingPhase = false;
                 }
-                stateChanged = true;
+                // Update game state to reflect changes
+                const updatedState = game.getState();
+                setGameState(updatedState);
                 console.log('[VotingPhase] Server cleared eliminated player, clearing locally');
               } else if (serverState.eliminatedPlayer !== null) {
                 const currentState = game.getState();
