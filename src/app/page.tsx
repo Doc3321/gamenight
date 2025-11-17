@@ -521,7 +521,27 @@ export default function Home() {
           <GameBoard 
             game={game!} 
             onReset={resetGame} 
-            isAdmin={appMode === 'online' && room?.hostId === currentPlayerId}
+            isAdmin={appMode === 'online' && room && (() => {
+              // Check if current player is the host
+              if (room.hostId === currentPlayerId) {
+                return true;
+              }
+              // Check if host is eliminated and current player is first active player
+              const gameState = game!.getState();
+              const hostPlayer = gameState.players.find(p => p.id === parseInt(room.hostId));
+              if (hostPlayer?.isEliminated) {
+                const activePlayers = gameState.players.filter(p => !p.isEliminated);
+                if (activePlayers.length > 0) {
+                  const firstActivePlayer = activePlayers[0];
+                  const currentPlayer = gameState.players.find(p => {
+                    const roomPlayer = room.players.find(rp => rp.id === currentPlayerId);
+                    return roomPlayer && p.name === roomPlayer.name;
+                  });
+                  return currentPlayer && currentPlayer.id === firstActivePlayer.id;
+                }
+              }
+              return false;
+            })()}
             currentPlayerId={appMode === 'online' && room 
               ? game!.getState().players.findIndex(p => {
                   const roomPlayer = room.players.find(rp => rp.id === currentPlayerId);
