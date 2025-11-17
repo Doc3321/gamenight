@@ -31,7 +31,6 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   const [gameState, setGameState] = useState(game.getState());
   const [showResults, setShowResults] = useState(false);
   const [eliminatedPlayer, setEliminatedPlayer] = useState<Player | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [tiedPlayers, setTiedPlayers] = useState<Player[]>([]);
   const [showTieResults, setShowTieResults] = useState(false);
   const [showWrongElimination, setShowWrongElimination] = useState(false);
@@ -1595,10 +1594,12 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       });
       
       const updatedState = game.getState();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const gameStateInternal = (game as any).state;
       console.log('[VotingPhase] Updated state after continue:', {
         votingPhase: updatedState.votingPhase,
         votingActivated: updatedState.votingActivated,
-        eliminatedPlayer: (game as any).state.eliminatedPlayer,
+        eliminatedPlayer: gameStateInternal.eliminatedPlayer,
         currentVotingPlayerIndex: updatedState.currentVotingPlayerIndex
       });
       
@@ -1638,7 +1639,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             return;
           }
           
-          const data = await response.json();
+          await response.json(); // Consume response
           console.log('[VotingPhase] Successfully synced continue after elimination - new voting round ready');
           
           // Immediately refetch from server to get the updated state
@@ -1943,7 +1944,6 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       
       const winnerType = eliminatedWordType === 'imposter' ? 'מתחזה' : 'מילה דומה';
       const gameWord = currentGameStateForRender.gameWord || '';
-      const eliminatedPlayerWord = eliminatedPlayer.currentWord || '';
       
       // Sync game completion to server
       if (roomId && gameState.isOnline) {

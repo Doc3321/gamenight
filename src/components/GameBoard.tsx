@@ -334,7 +334,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
     }, 150); // Poll every 150ms for faster updates and result sync
     
     return () => clearInterval(pollInterval);
-  }, [gameState.isOnline, roomId, game]);
+  }, [gameState.isOnline, roomId, game, viewingPlayerId]);
 
   useEffect(() => {
     const newState = game.getState();
