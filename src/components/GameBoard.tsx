@@ -28,8 +28,30 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
   const [isFirstSpin, setIsFirstSpin] = useState(true);
   const [currentVotingPlayerIndex, setCurrentVotingPlayerIndex] = useState(0);
   const [spinProgress, setSpinProgress] = useState(0);
+  const [isSpinningLock, setIsSpinningLock] = useState(false); // Prevent race conditions
 
   const handleSpin = async () => {
+    // Prevent multiple simultaneous spins (race condition fix)
+    if (isSpinningLock || isSpinning) {
+      console.warn('[GameBoard] Spin already in progress, ignoring duplicate call');
+      return;
+    }
+    
+    // Validate it's actually the player's turn (online mode)
+    const currentState = game.getState();
+    if (currentState.isOnline && viewingPlayerId !== undefined) {
+      const expectedIndex = viewingPlayerId - 1;
+      if (currentState.currentPlayerIndex !== expectedIndex) {
+        console.warn('[GameBoard] Not player\'s turn, ignoring spin', {
+          currentIndex: currentState.currentPlayerIndex,
+          expectedIndex,
+          viewingPlayerId
+        });
+        return;
+      }
+    }
+    
+    setIsSpinningLock(true);
     setIsSpinning(true);
     setShowResult(false);
     setSpinProgress(0);
@@ -47,43 +69,58 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
     
     // Simulate spinning delay
     setTimeout(async () => {
-      const result = game.spin();
-      if (result) {
-        const newState = game.getState();
-        setGameState(newState);
-        setIsSpinning(false);
-        setShowResult(true);
-        setSpinProgress(100);
-        clearInterval(progressInterval);
-        
-        // Sync game state to server for online games
-        // Use fresh state from game object, not component state
-        const freshState = game.getState();
-        if (freshState.isOnline && roomId) {
-          try {
-            await fetch('/api/rooms/game-state', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                roomId,
-                gameStateData: {
-                  currentPlayerIndex: freshState.currentPlayerIndex,
-                  currentSpin: freshState.currentSpin, // Also sync currentSpin
-                  votingPhase: freshState.votingPhase,
-                  votingActivated: freshState.votingActivated,
-                  playerWords: freshState.players.reduce((acc, p) => {
-                    if (p.currentWord) {
-                      acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
-                    }
-                    return acc;
-                  }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
+      try {
+        const result = game.spin();
+        if (result) {
+          const newState = game.getState();
+          setGameState(newState);
+          setIsSpinning(false);
+          setShowResult(true);
+          setSpinProgress(100);
+          clearInterval(progressInterval);
+          
+          // Sync game state to server for online games
+          // Use fresh state from game object, not component state
+          const freshState = game.getState();
+          if (freshState.isOnline && roomId) {
+            try {
+              const response = await fetch('/api/rooms/game-state', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  roomId,
+                  gameStateData: {
+                    currentPlayerIndex: freshState.currentPlayerIndex,
+                    currentSpin: freshState.currentSpin,
+                    votingPhase: freshState.votingPhase,
+                    votingActivated: freshState.votingActivated,
+                    playerWords: freshState.players.reduce((acc, p) => {
+                      if (p.currentWord) {
+                        acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
+                      }
+                      return acc;
+                    }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
+                  }
+                })
+              });
+              
+              if (!response.ok) {
+                console.error('[GameBoard] Server rejected spin sync:', response.status);
+                // Rollback local state if server rejects
+                const serverState = await fetch(`/api/rooms/game-state?roomId=${roomId}`).then(r => r.json());
+                if (serverState.room?.gameStateData) {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (game as any).state.currentPlayerIndex = serverState.room.gameStateData.currentPlayerIndex;
+                  setGameState(game.getState());
                 }
-              })
-            });
-          } catch (error) {
-            console.error('Error syncing game state:', error);
+              }
+            } catch (error) {
+              console.error('Error syncing game state:', error);
+            }
           }
         }
+      } finally {
+        setIsSpinningLock(false);
       }
     }, 2000);
   };
@@ -101,13 +138,15 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
     // Check if all players have received their words
     const newState = game.getState();
     if (newState.currentPlayerIndex >= newState.players.length) {
-      // All players have spun - start voting phase
-      game.startVotingPhase();
+      // All players have spun - start voting phase (only if not already started)
+      if (!newState.votingPhase) {
+        game.startVotingPhase();
+      }
       const updatedState = game.getState();
       setGameState(updatedState);
       
-      // Sync to server
-      if (gameState.isOnline && roomId) {
+      // Sync to server (use newState, not stale gameState)
+      if (newState.isOnline && roomId) {
         try {
           await fetch('/api/rooms/game-state', {
             method: 'POST',
@@ -143,8 +182,8 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
       const updatedState = game.getState();
       setGameState(updatedState);
       
-      // Sync to server
-      if (gameState.isOnline && roomId) {
+      // Sync to server (use newState, not stale gameState)
+      if (newState.isOnline && roomId) {
         try {
           await fetch('/api/rooms/game-state', {
             method: 'POST',
@@ -233,12 +272,25 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const player = (game as any).state.players.find((p: { id: number }) => p.id === playerId);
                 if (player && wordDataTyped.word && wordDataTyped.type) {
-                  // Always update if word is different or missing
-                  if (player.currentWord !== wordDataTyped.word || !player.currentWord) {
+                  // Only update if word is missing (don't overwrite existing words during active gameplay)
+                  // Server is source of truth, but we preserve words that are already assigned to avoid mid-spin overwrites
+                  if (!player.currentWord) {
+                    // Word is missing, update from server
                     player.currentWord = wordDataTyped.word;
                     player.wordType = wordDataTyped.type;
                     stateChanged = true;
-                    console.log('[GameBoard] Updated player word:', { playerId, word: wordDataTyped.word });
+                    console.log('[GameBoard] Updated missing player word:', { playerId, word: wordDataTyped.word });
+                  } else if (player.currentWord !== wordDataTyped.word) {
+                    // Word exists but differs from server - only update if player has already received their word
+                    // (i.e., their index is less than currentPlayerIndex, meaning they've already spun)
+                    const playerIndex = currentState.players.findIndex(p => p.id === playerId);
+                    if (playerIndex < currentState.currentPlayerIndex) {
+                      // Player has already spun, server word takes precedence
+                      player.currentWord = wordDataTyped.word;
+                      player.wordType = wordDataTyped.type;
+                      stateChanged = true;
+                      console.log('[GameBoard] Synced player word from server (overwrite):', { playerId, old: player.currentWord, new: wordDataTyped.word });
+                    }
                   }
                 } else if (!player) {
                   console.warn('[GameBoard] Player not found for word sync:', playerId);

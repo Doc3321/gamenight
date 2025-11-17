@@ -37,8 +37,15 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   const [activeEmotes, setActiveEmotes] = useState<Array<{ id: number; emote: EmoteType; playerName: string }>>([]);
   const [showConfetti, setShowConfetti] = useState(false);
   const [isContinuing, setIsContinuing] = useState(false);
+  const [isVotingLock, setIsVotingLock] = useState(false); // Prevent race conditions
 
   const handleVote = async (voteType?: 'imposter' | 'other-word') => {
+    // Prevent multiple simultaneous votes (race condition fix)
+    if (isVotingLock) {
+      console.warn('[VotingPhase] Vote already in progress, ignoring duplicate call');
+      return;
+    }
+    
     const target = voteType 
       ? (voteType === 'imposter' ? selectedImposterTarget : selectedOtherWordTarget)
       : selectedTarget;
@@ -56,11 +63,32 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
         console.log('Voting not activated yet');
         return;
       }
+      
+      // Validate it's actually the player's turn to vote (sequential voting)
+      const activePlayers = currentState.players.filter(p => !p.isEliminated);
+      const currentVotingIdx = currentState.currentVotingPlayerIndex ?? 0;
+      if (currentVotingIdx < activePlayers.length) {
+        const currentVotingPlayer = activePlayers[currentVotingIdx];
+        if (currentVotingPlayer.id !== currentPlayerId) {
+          console.warn('[VotingPhase] Not player\'s turn to vote', {
+            currentVotingPlayerId: currentVotingPlayer.id,
+            currentPlayerId,
+            currentVotingIdx
+          });
+          return;
+        }
+      }
+    }
+    
+    // Check if player is eliminated (shouldn't happen, but double-check)
+    const currentStateBeforeVote = game.getState();
+    const currentPlayerBeforeVote = currentStateBeforeVote.players.find(p => p.id === currentPlayerId);
+    if (!currentPlayerBeforeVote || currentPlayerBeforeVote.isEliminated) {
+      console.warn('[VotingPhase] Player is eliminated, cannot vote');
+      return;
     }
     
     // Prevent duplicate votes - check if player has already voted for this type
-    const currentStateBeforeVote = game.getState();
-    const currentPlayerBeforeVote = currentStateBeforeVote.players.find(p => p.id === currentPlayerId);
     if (currentPlayerBeforeVote) {
       if (voteType === 'imposter' && currentPlayerBeforeVote.votedForImposter !== undefined) {
         return; // Already voted for imposter
@@ -73,8 +101,14 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       }
     }
     
-    const success = game.castVote(currentPlayerId, target, voteType);
-    if (success) {
+    setIsVotingLock(true);
+    try {
+      const success = game.castVote(currentPlayerId, target, voteType);
+      if (!success) {
+        console.warn('[VotingPhase] Vote was rejected by game logic');
+        return;
+      }
+      
       const newState = game.getState();
       // Ensure votingActivated stays true after voting
       if (newState.isOnline && !newState.votingActivated) {
@@ -133,6 +167,9 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
           console.error('Error syncing vote:', error);
         }
       }
+    } finally {
+      setIsVotingLock(false);
+    }
       
       // Check if voting is complete for this player (both votes in mixed mode)
       const currentPlayer = newState.players.find(p => p.id === currentPlayerId);
@@ -1038,10 +1075,14 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                     }
                     
                     // Update target player's vote count (only if target is not eliminated)
+                    // CRITICAL: Only increment if we haven't already counted this vote
+                    // (votes were reset above, so this is safe, but double-check target exists)
                     const target = currentState.players.find(p => p.id === vote.targetId);
                     if (target && !target.isEliminated) {
                       if (target.votes === undefined) target.votes = 0;
                       target.votes++;
+                    } else if (!target) {
+                      console.warn('[VotingPhase] Target player not found for vote:', vote.targetId);
                     }
                     
                     stateChanged = true;
