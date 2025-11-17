@@ -521,7 +521,7 @@ export default function Home() {
           <GameBoard 
             game={game!} 
             onReset={resetGame} 
-            isAdmin={appMode === 'online' && room && (() => {
+            isAdmin={appMode === 'online' && room ? (() => {
               // Check if current player is the host
               if (room.hostId === currentPlayerId) {
                 return true;
@@ -537,11 +537,11 @@ export default function Home() {
                     const roomPlayer = room.players.find(rp => rp.id === currentPlayerId);
                     return roomPlayer && p.name === roomPlayer.name;
                   });
-                  return currentPlayer && currentPlayer.id === firstActivePlayer.id;
+                  return !!(currentPlayer && currentPlayer.id === firstActivePlayer.id);
                 }
               }
               return false;
-            })()}
+            })() : false}
             currentPlayerId={appMode === 'online' && room 
               ? game!.getState().players.findIndex(p => {
                   const roomPlayer = room.players.find(rp => rp.id === currentPlayerId);
