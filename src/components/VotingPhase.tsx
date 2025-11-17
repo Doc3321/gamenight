@@ -1212,10 +1212,11 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               });
             }
           }
-        } catch (error) {
-          console.error('Error syncing game state:', error);
         }
-      };
+      } catch (error) {
+        console.error('Error syncing game state:', error);
+      }
+    };
       
       // Poll as fallback only (every 1 second - broadcasts are primary)
       const interval = setInterval(() => {
