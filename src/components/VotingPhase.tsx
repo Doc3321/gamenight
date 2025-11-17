@@ -1155,33 +1155,51 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             
             // If server has eliminated player, sync it immediately
             // CRITICAL: Sync to ALL players, including the eliminated player themselves
-            if (serverState?.eliminatedPlayer !== undefined && serverState.eliminatedPlayer !== null) {
-              const currentState = game.getState();
-              const eliminated = currentState.players.find(p => p.id === serverState.eliminatedPlayer.id);
-              if (eliminated) {
-                // Always sync eliminated state, even if already set
-                eliminated.isEliminated = true;
-                eliminated.votes = serverState.eliminatedPlayer.votes || 0;
+            // BUT: If server says eliminatedPlayer is null, that means it was cleared - respect that
+            if (serverState?.eliminatedPlayer !== undefined) {
+              if (serverState.eliminatedPlayer === null) {
+                // Server says eliminated player was cleared - clear it locally too
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (game as any).state.eliminatedPlayer = eliminated;
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (game as any).state.votingPhase = true;
-                setEliminatedPlayer(eliminated);
-                if (serverState.wrongElimination) {
-                  setShowWrongElimination(true);
-                  setShowResults(false);
-                  setShowTieResults(false);
-                } else {
-                  setShowResults(true);
-                  setShowWrongElimination(false);
-                  setShowTieResults(false);
-                  if (eliminated.wordType === 'imposter' || eliminated.wordType === 'similar') {
-                    setShowConfetti(true);
-                  }
+                (game as any).state.eliminatedPlayer = undefined;
+                setEliminatedPlayer(null);
+                setShowResults(false);
+                setShowWrongElimination(false);
+                setShowTieResults(false);
+                // CRITICAL: Also clear votingPhase if server cleared eliminated player
+                if (serverState.votingPhase === false) {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (game as any).state.votingPhase = false;
                 }
-                const updatedState = game.getState();
-                setGameState(updatedState);
-                return; // Don't check votes if we already have results
+                stateChanged = true;
+                console.log('[VotingPhase] Server cleared eliminated player, clearing locally');
+              } else if (serverState.eliminatedPlayer !== null) {
+                const currentState = game.getState();
+                const eliminated = currentState.players.find(p => p.id === serverState.eliminatedPlayer.id);
+                if (eliminated) {
+                  // Always sync eliminated state, even if already set
+                  eliminated.isEliminated = true;
+                  eliminated.votes = serverState.eliminatedPlayer.votes || 0;
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (game as any).state.eliminatedPlayer = eliminated;
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (game as any).state.votingPhase = true;
+                  setEliminatedPlayer(eliminated);
+                  if (serverState.wrongElimination) {
+                    setShowWrongElimination(true);
+                    setShowResults(false);
+                    setShowTieResults(false);
+                  } else {
+                    setShowResults(true);
+                    setShowWrongElimination(false);
+                    setShowTieResults(false);
+                    if (eliminated.wordType === 'imposter' || eliminated.wordType === 'similar') {
+                      setShowConfetti(true);
+                    }
+                  }
+                  const updatedState = game.getState();
+                  setGameState(updatedState);
+                  return; // Don't check votes if we already have results
+                }
               }
             }
             
@@ -1399,7 +1417,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   }, [game, showResults, handleCalculateResults, showTieResults, showWrongElimination, gameState.isOnline, roomId]);
 
   const handleContinueAfterElimination = async () => {
-    console.log('[VotingPhase] handleContinueAfterElimination called');
+    console.log('[VotingPhase] handleContinueAfterElimination called - starting new voting round');
     
     // Clear all result states first
     setShowResults(false);
@@ -1417,9 +1435,9 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     // Reset voting activation so admin needs to activate again for next round
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (game as any).state.votingActivated = false;
-    // CRITICAL: Clear voting phase state to go back to word assignment screen
+    // CRITICAL: Keep votingPhase TRUE - we're still in voting phase, just starting a new round
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (game as any).state.votingPhase = false;
+    (game as any).state.votingPhase = true;
     // Clear tie state if it exists
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (game as any).state.canRevote = false;
@@ -1427,23 +1445,34 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (game as any).state.eliminatedPlayer = undefined;
     
+    // Reset all ACTIVE players' voting state for the new round
+    // CRITICAL: Eliminated players stay eliminated and cannot vote
+    const currentState = game.getState();
+    currentState.players.forEach(p => {
+      if (!p.isEliminated) {
+        // Only reset voting state for active (non-eliminated) players
+        p.hasVoted = false;
+        p.votedFor = undefined;
+        p.votedForImposter = undefined;
+        p.votedForOtherWord = undefined;
+        p.votes = 0; // Reset vote count for new round
+      }
+      // Eliminated players keep their isEliminated: true status
+      // They will see spectate mode during the new voting round
+    });
+    
     const updatedState = game.getState();
     console.log('[VotingPhase] Updated state after continue:', {
       votingPhase: updatedState.votingPhase,
       votingActivated: updatedState.votingActivated,
-      eliminatedPlayer: (game as any).state.eliminatedPlayer
+      eliminatedPlayer: (game as any).state.eliminatedPlayer,
+      currentVotingPlayerIndex: updatedState.currentVotingPlayerIndex
     });
     
-    // Force state update immediately
-    setGameState({
-      ...updatedState,
-      players: updatedState.players.map(p => ({ ...p }))
-    });
-    
-    // Sync continue after elimination to server
+    // Sync continue after elimination to server - start new voting round
     if (roomId && gameState.isOnline) {
       try {
-        console.log('[VotingPhase] Syncing continue after elimination to server');
+        console.log('[VotingPhase] Syncing continue after elimination to server - starting new voting round');
         const response = await fetch('/api/rooms/game-state', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1451,14 +1480,14 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             roomId,
             gameStateData: {
               currentPlayerIndex: updatedState.currentPlayerIndex,
-              votingPhase: false, // CRITICAL: Set to false to go back to word assignment
-              votingActivated: false, // Reset activation for next round
-              currentVotingPlayerIndex: 0, // Reset voting index
+              votingPhase: true, // CRITICAL: Keep voting phase TRUE - we're starting a new voting round
+              votingActivated: false, // Reset activation so admin can activate again
+              currentVotingPlayerIndex: 0, // Reset voting index for new round
               wrongElimination: false,
               isTie: false, // Clear tie state
-              eliminatedPlayer: undefined, // Clear eliminated player
-              tiedPlayers: undefined, // Clear tied players
-              votes: {}, // Clear votes
+              eliminatedPlayer: null, // CRITICAL: Clear eliminated player
+              tiedPlayers: null, // CRITICAL: Clear tied players
+              votes: {}, // Clear votes for new round
               playerWords: updatedState.players.reduce((acc, p) => {
                 if (p.currentWord) {
                   acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
@@ -1470,30 +1499,39 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
         });
         
         if (!response.ok) {
-          console.error('[VotingPhase] Failed to sync continue after elimination:', await response.text());
+          const errorText = await response.text();
+          console.error('[VotingPhase] Failed to sync continue after elimination:', errorText);
         } else {
-          console.log('[VotingPhase] Successfully synced continue after elimination');
+          const data = await response.json();
+          console.log('[VotingPhase] Successfully synced continue after elimination - new voting round ready');
+          
+          // Wait a bit for server to process, then update local state from server response
+          setTimeout(() => {
+            const finalState = game.getState();
+            // Ensure local state matches what we sent to server
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (game as any).state.votingPhase = true; // Keep voting phase true
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (game as any).state.votingActivated = false; // Reset activation
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (game as any).state.eliminatedPlayer = undefined; // Clear eliminated player
+            
+            setGameState({
+              ...finalState,
+              players: finalState.players.map(p => ({ ...p }))
+            });
+          }, 200);
         }
-        
-        // Force state update after sync to ensure UI updates
-        const finalState = game.getState();
-        setGameState({
-          ...finalState,
-          players: finalState.players.map(p => ({ ...p }))
-        });
       } catch (error) {
         console.error('Error syncing continue after elimination:', error);
       }
     }
     
-    // Force another state update after a short delay to ensure UI reflects changes
-    setTimeout(() => {
-      const finalState = game.getState();
-      setGameState({
-        ...finalState,
-        players: finalState.players.map(p => ({ ...p }))
-      });
-    }, 100);
+    // Force state update immediately (even if online, update local state)
+    setGameState({
+      ...updatedState,
+      players: updatedState.players.map(p => ({ ...p }))
+    });
   };
 
   // Get current game state directly to ensure we have the latest data
@@ -1512,9 +1550,22 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   // Also check component state for eliminated player
   const hasEliminatedPlayerInState = eliminatedPlayer !== null && eliminatedPlayer !== undefined;
   
-  // SPECTATOR MODE: If player is eliminated but game continues (wrong elimination),
+  // SPECTATOR MODE: If player is eliminated but game continues (wrong elimination or new voting round),
   // show them the voting phase in read-only mode BEFORE the general eliminated check
-  if (currentPlayer && currentPlayer.isEliminated && showWrongElimination && !showResults && !showTieResults) {
+  // Show spectate mode if:
+  // 1. Player is eliminated
+  // 2. We're in voting phase (game continues)
+  // 3. No results are showing (not showing elimination results)
+  // 4. Either wrongElimination was shown OR voting is activated (new round started)
+  const isInVotingPhase = currentGameStateForRender.votingPhase === true;
+  const shouldShowSpectateMode = currentPlayer && 
+    currentPlayer.isEliminated && 
+    isInVotingPhase &&
+    !showResults && 
+    !showTieResults &&
+    (showWrongElimination || currentGameStateForRender.votingActivated || !hasEliminatedPlayer);
+  
+  if (shouldShowSpectateMode) {
     const activePlayers = currentGameStateForRender.players.filter(p => !p.isEliminated);
     const currentVotingIndex = currentGameStateForRender.currentVotingPlayerIndex ?? 0;
     const currentVoter = activePlayers[currentVotingIndex];
