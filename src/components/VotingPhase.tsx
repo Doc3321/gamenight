@@ -1961,7 +1961,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                       </div>
                       <Button
                         onClick={() => handleVote('imposter')}
-                        disabled={!selectedImposterTarget || selectedOtherWordTarget === selectedImposterTarget}
+                        disabled={!selectedImposterTarget || selectedOtherWordTarget === selectedImposterTarget || !canVote}
                         className="w-full"
                         size="lg"
                       >
@@ -2002,7 +2002,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                       </div>
                       <Button
                         onClick={() => handleVote('other-word')}
-                        disabled={!selectedOtherWordTarget || selectedImposterTarget === selectedOtherWordTarget}
+                        disabled={!selectedOtherWordTarget || selectedImposterTarget === selectedOtherWordTarget || !canVote}
                         className="w-full"
                         size="lg"
                       >
@@ -2052,8 +2052,19 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                   </div>
               
                   <Button
-                    onClick={() => handleVote()}
-                    disabled={!selectedTarget}
+                    onClick={() => {
+                      console.log('[VotingPhase] Vote button clicked:', {
+                        selectedTarget,
+                        canVote,
+                        hasVoted,
+                        isVotingActivatedForVote,
+                        isMyTurnToVote,
+                        currentVotingIndex,
+                        currentPlayerId
+                      });
+                      handleVote();
+                    }}
+                    disabled={!selectedTarget || !canVote}
                     className="w-full mt-4"
                     size="lg"
                   >
