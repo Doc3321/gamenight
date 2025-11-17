@@ -167,9 +167,6 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
           console.error('Error syncing vote:', error);
         }
       }
-    } finally {
-      setIsVotingLock(false);
-    }
       
       // Check if voting is complete for this player (both votes in mixed mode)
       const currentPlayer = newState.players.find(p => p.id === currentPlayerId);
@@ -288,6 +285,8 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       } else {
         setSelectedTarget(null);
       }
+    } finally {
+      setIsVotingLock(false);
     }
   };
 
@@ -1213,7 +1212,6 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               });
             }
           }
-        }
         } catch (error) {
           console.error('Error syncing game state:', error);
         }
