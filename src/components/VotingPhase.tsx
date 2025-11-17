@@ -1399,20 +1399,9 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   }, [game, showResults, handleCalculateResults, showTieResults, showWrongElimination, gameState.isOnline, roomId]);
 
   const handleContinueAfterElimination = async () => {
-    // Use the game's continueAfterWrongElimination method to properly reset state
-    game.continueAfterWrongElimination();
-    // Reset voting activation so admin needs to activate again for next round
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (game as any).state.votingActivated = false;
-    // CRITICAL: Clear voting phase state to go back to word assignment screen
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (game as any).state.votingPhase = false;
-    // Clear tie state if it exists
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (game as any).state.canRevote = false;
+    console.log('[VotingPhase] handleContinueAfterElimination called');
     
-    const updatedState = game.getState();
-    setGameState(updatedState);
+    // Clear all result states first
     setShowResults(false);
     setShowTieResults(false);
     setShowWrongElimination(false);
@@ -1422,11 +1411,40 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     setSelectedImposterTarget(null);
     setSelectedOtherWordTarget(null);
     
+    // Use the game's continueAfterWrongElimination method to properly reset state
+    game.continueAfterWrongElimination();
+    
+    // Reset voting activation so admin needs to activate again for next round
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (game as any).state.votingActivated = false;
+    // CRITICAL: Clear voting phase state to go back to word assignment screen
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (game as any).state.votingPhase = false;
+    // Clear tie state if it exists
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (game as any).state.canRevote = false;
+    // CRITICAL: Clear eliminated player from game state
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (game as any).state.eliminatedPlayer = undefined;
+    
+    const updatedState = game.getState();
+    console.log('[VotingPhase] Updated state after continue:', {
+      votingPhase: updatedState.votingPhase,
+      votingActivated: updatedState.votingActivated,
+      eliminatedPlayer: (game as any).state.eliminatedPlayer
+    });
+    
+    // Force state update immediately
+    setGameState({
+      ...updatedState,
+      players: updatedState.players.map(p => ({ ...p }))
+    });
+    
     // Sync continue after elimination to server
     if (roomId && gameState.isOnline) {
       try {
         console.log('[VotingPhase] Syncing continue after elimination to server');
-        await fetch('/api/rooms/game-state', {
+        const response = await fetch('/api/rooms/game-state', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1451,6 +1469,12 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
           })
         });
         
+        if (!response.ok) {
+          console.error('[VotingPhase] Failed to sync continue after elimination:', await response.text());
+        } else {
+          console.log('[VotingPhase] Successfully synced continue after elimination');
+        }
+        
         // Force state update after sync to ensure UI updates
         const finalState = game.getState();
         setGameState({
@@ -1462,8 +1486,14 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       }
     }
     
-    // Don't call onVoteComplete - just let the component re-render with cleared state
-    // The voting phase will continue automatically
+    // Force another state update after a short delay to ensure UI reflects changes
+    setTimeout(() => {
+      const finalState = game.getState();
+      setGameState({
+        ...finalState,
+        players: finalState.players.map(p => ({ ...p }))
+      });
+    }, 100);
   };
 
   // Get current game state directly to ensure we have the latest data
@@ -1883,7 +1913,14 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                   <p className="text-muted-foreground">השחקן הודח מהמשחק</p>
                 </div>
                 {isAdmin && (
-                  <Button onClick={handleContinueAfterElimination} size="lg" className="mt-4">
+                  <Button 
+                    onClick={() => {
+                      console.log('[VotingPhase] Continue after elimination clicked');
+                      handleContinueAfterElimination();
+                    }} 
+                    size="lg" 
+                    className="mt-4 w-full"
+                  >
                     המשך
                   </Button>
                 )}
