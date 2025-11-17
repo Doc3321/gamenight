@@ -1482,7 +1482,12 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   const hasEliminatedPlayerInState = eliminatedPlayer !== null && eliminatedPlayer !== undefined;
   
   // CRITICAL: Check if current player is eliminated - show view-only screen
+  // DYNAMIC: Show different messages based on game state
   if (currentPlayer && currentPlayer.isEliminated) {
+    const eliminatedWordType = currentPlayer.wordType || 'normal';
+    const isGameWon = eliminatedWordType === 'imposter' || eliminatedWordType === 'similar';
+    const winnerType = eliminatedWordType === 'imposter' ? 'מתחזה' : 'מילה דומה';
+    
     return (
       <div className="max-w-2xl mx-auto">
         <Card className="border-red-500 border-2">
@@ -1502,17 +1507,31 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               <p className="text-lg text-muted-foreground">הודחת מהמשחק ולא יכול להצביע</p>
               <p className="text-muted-foreground">אתה יכול לצפות במשחק בלבד</p>
             </div>
+            
+            {/* Game won - show winner message */}
+            {isGameWon && showResults && !showWrongElimination && (
+              <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                <p className="text-green-600 font-semibold text-lg">המשחק הסתיים!</p>
+                <p className="text-green-600 font-semibold">היית ה{winnerType} - הצליחו למצוא אותך!</p>
+                <p className="text-sm text-muted-foreground mt-2">ניצחון לשחקנים! 🎉</p>
+              </div>
+            )}
+            
+            {/* Wrong elimination - game continues */}
             {showWrongElimination && (
               <div className="mt-4 p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                <p className="text-orange-600 font-semibold">היית שחקן רגיל</p>
                 <p className="text-orange-600 font-semibold">עדיין צריך למצוא את המתחזה/מילה דומה!</p>
                 {!isAdmin && (
                   <p className="text-sm text-muted-foreground mt-2">ממתין למארח להתחיל הצבעה נוספת</p>
                 )}
               </div>
             )}
-            {showResults && !showWrongElimination && eliminatedPlayer && (
-              <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                <p className="text-green-600 font-semibold">המשחק ממשיך...</p>
+            
+            {/* Game continues (shouldn't happen after elimination, but handle it) */}
+            {showResults && !showWrongElimination && !isGameWon && (
+              <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <p className="text-blue-600 font-semibold">המשחק ממשיך...</p>
                 <p className="text-sm text-muted-foreground mt-2">ממתין לשחקנים להצביע</p>
               </div>
             )}
@@ -1525,49 +1544,181 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   // Show results screens FIRST before any activation screens
   // This ensures all players see results when they're available
   
-  // Wrong elimination screen - check FIRST
-  if (showWrongElimination && eliminatedPlayer) {
-    return (
-      <div className="max-w-2xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5 }}
-        >
-          <Card className="border-orange-500 border-2">
-            <CardHeader className="text-center">
-              <CardTitle className="text-3xl text-orange-600">השחקן שהודח היה רגיל!</CardTitle>
-            </CardHeader>
-            <CardContent className="text-center space-y-4">
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.2, type: "spring" }}
-                className="text-4xl font-bold text-orange-600 py-6"
-              >
-                {eliminatedPlayer.name}
-              </motion.div>
-              <div className="space-y-2">
-                <p className="text-lg">קיבל {eliminatedPlayer.votes} קולות</p>
-                <p className="text-muted-foreground">השחקן הודח מהמשחק ולא יכול להצביע</p>
-                <p className="text-red-600 font-semibold">עדיין צריך למצוא את המתחזה/מילה דומה!</p>
-              </div>
-              {isAdmin && (
-                <Button onClick={handleContinueAfterWrongElimination} size="lg" className="mt-4">
-                  הצבעה נוספת
-                </Button>
-              )}
-              {!isAdmin && (
-                <p className="text-muted-foreground">ממתין למארח להתחיל הצבעה נוספת</p>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
-    );
+  // DYNAMIC: Check elimination result and show appropriate screen
+  if (eliminatedPlayer) {
+    const eliminatedWordType = eliminatedPlayer.wordType || 'normal';
+    const isGameWon = eliminatedWordType === 'imposter' || eliminatedWordType === 'similar';
+    
+    // Game won - imposter/similar word found!
+    if (isGameWon && showResults && !showWrongElimination) {
+      // Mark game as completed
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (game as any).state.gameCompleted = true;
+      
+      const winnerType = eliminatedWordType === 'imposter' ? 'מתחזה' : 'מילה דומה';
+      
+      // Sync game completion to server
+      if (roomId && gameState.isOnline) {
+        const updatedState = game.getState();
+        fetch('/api/rooms/game-state', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            roomId,
+            gameStateData: {
+              currentPlayerIndex: updatedState.currentPlayerIndex,
+              votingPhase: updatedState.votingPhase,
+              votingActivated: updatedState.votingActivated,
+              eliminatedPlayer: {
+                id: eliminatedPlayer.id,
+                name: eliminatedPlayer.name,
+                wordType: eliminatedPlayer.wordType,
+                votes: eliminatedPlayer.votes || 0
+              },
+              wrongElimination: false,
+              isTie: false,
+              playerWords: updatedState.players.reduce((acc, p) => {
+                if (p.currentWord) {
+                  acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
+                }
+                return acc;
+              }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
+            }
+          })
+        }).catch(error => {
+          console.error('Error syncing game completion:', error);
+        });
+      }
+      
+      return (
+        <div className="max-w-2xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5 }}
+          >
+            <Card className="border-green-500 border-2">
+              <CardHeader className="text-center">
+                <CardTitle className="text-3xl text-green-600">המשחק הסתיים!</CardTitle>
+              </CardHeader>
+              <CardContent className="text-center space-y-4">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: 0.2, type: "spring" }}
+                  className="text-4xl font-bold text-green-600 py-6"
+                >
+                  {eliminatedPlayer.name}
+                </motion.div>
+                <div className="space-y-2">
+                  <p className="text-lg">קיבל {eliminatedPlayer.votes} קולות</p>
+                  <p className="text-xl font-semibold text-green-600">היה: {winnerType}</p>
+                  <p className="text-muted-foreground">השחקן הודח מהמשחק</p>
+                  <p className="text-2xl font-bold text-green-600 mt-4">ניצחון! 🎉</p>
+                  <p className="text-muted-foreground">הצלחתם למצוא את ה{winnerType}!</p>
+                </div>
+                <div className="mt-6">
+                  <Button onClick={onVoteComplete} size="lg" className="mt-4">
+                    חזור לתפריט
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </div>
+      );
+    }
+    
+    // Wrong elimination - innocent player eliminated
+    if (showWrongElimination && eliminatedWordType === 'normal') {
+      return (
+        <div className="max-w-2xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5 }}
+          >
+            <Card className="border-orange-500 border-2">
+              <CardHeader className="text-center">
+                <CardTitle className="text-3xl text-orange-600">השחקן שהודח היה רגיל!</CardTitle>
+              </CardHeader>
+              <CardContent className="text-center space-y-4">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: 0.2, type: "spring" }}
+                  className="text-4xl font-bold text-orange-600 py-6"
+                >
+                  {eliminatedPlayer.name}
+                </motion.div>
+                <div className="space-y-2">
+                  <p className="text-lg">קיבל {eliminatedPlayer.votes} קולות</p>
+                  <p className="text-muted-foreground">השחקן הודח מהמשחק ולא יכול להצביע</p>
+                  <p className="text-red-600 font-semibold">עדיין צריך למצוא את המתחזה/מילה דומה!</p>
+                </div>
+                {isAdmin && (
+                  <Button onClick={handleContinueAfterWrongElimination} size="lg" className="mt-4">
+                    הצבעה נוספת
+                  </Button>
+                )}
+                {!isAdmin && (
+                  <p className="text-muted-foreground">ממתין למארח להתחיל הצבעה נוספת</p>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        </div>
+      );
+    }
+    
+    // Correct elimination but game continues (shouldn't happen, but handle it)
+    if (showResults && !showWrongElimination && !isGameWon) {
+      return (
+        <div className="max-w-2xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5 }}
+          >
+            <Card className="border-red-500 border-2">
+              <CardHeader className="text-center">
+                <CardTitle className="text-3xl text-red-600">השחקן הודח!</CardTitle>
+              </CardHeader>
+              <CardContent className="text-center space-y-4">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: 0.2, type: "spring" }}
+                  className="text-4xl font-bold text-red-600 py-6"
+                >
+                  {eliminatedPlayer.name}
+                </motion.div>
+                <div className="space-y-2">
+                  <p className="text-lg">קיבל {eliminatedPlayer.votes} קולות</p>
+                  {eliminatedWordType && eliminatedWordType !== 'normal' && (
+                    <p className="text-xl font-semibold text-green-600">
+                      היה: {eliminatedWordType === 'imposter' ? 'מתחזה' : 'מילה דומה'}
+                    </p>
+                  )}
+                  <p className="text-muted-foreground">השחקן הודח מהמשחק</p>
+                </div>
+                {isAdmin && (
+                  <Button onClick={handleContinueAfterElimination} size="lg" className="mt-4">
+                    המשך
+                  </Button>
+                )}
+                {!isAdmin && (
+                  <p className="text-muted-foreground">ממתין למארח להמשיך</p>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        </div>
+      );
+    }
   }
 
-  // Tie results screen - check SECOND
+  // Tie results screen - show tied players dynamically
   if (showTieResults) {
     return (
       <div className="max-w-2xl mx-auto">
@@ -1576,9 +1727,25 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             <CardTitle className="text-2xl text-yellow-600">שוויון בהצבעה!</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-center text-muted-foreground">
-              יש שוויון בקולות. המארח יכול להפעיל הצבעה מחדש.
-            </p>
+            <div className="space-y-2">
+              <p className="text-center text-muted-foreground">
+                יש שוויון בקולות בין השחקנים הבאים:
+              </p>
+              <div className="grid grid-cols-2 gap-3 mt-4">
+                {tiedPlayers.map((player) => (
+                  <div
+                    key={player.id}
+                    className="p-3 border-2 border-yellow-400 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 text-center"
+                  >
+                    <p className="font-semibold">{player.name}</p>
+                    <p className="text-sm text-muted-foreground">{player.votes || 0} קולות</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-center text-muted-foreground mt-4">
+                המארח יכול להפעיל הצבעה מחדש.
+              </p>
+            </div>
             {isAdmin && (
               <Button onClick={handleRevote} size="lg" className="w-full mt-4">
                 הצבעה מחדש
@@ -1595,73 +1762,6 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     );
   }
 
-  // Correct elimination screen - check THIRD
-  if (showResults && eliminatedPlayer) {
-    const eliminationType = eliminatedPlayer.wordType;
-    const typeText = eliminationType === 'imposter' 
-      ? 'מתחזה' 
-      : eliminationType === 'similar' 
-        ? 'מילה דומה' 
-        : 'רגיל';
-    const isCorrectElimination = eliminationType === 'imposter' || eliminationType === 'similar';
-    
-    return (
-      <div className="max-w-2xl mx-auto relative">
-        {isCorrectElimination && <Confetti trigger={showConfetti} onComplete={() => setShowConfetti(false)} />}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5 }}
-        >
-          <Card className={`border-2 ${eliminationType === 'normal' ? 'border-orange-500' : 'border-red-500'}`}>
-            <CardHeader className="text-center">
-              <CardTitle className="text-3xl text-red-600">השחקן הודח!</CardTitle>
-            </CardHeader>
-            <CardContent className="text-center space-y-4">
-              <div className="flex justify-center mb-4">
-                <PlayerAvatar name={eliminatedPlayer.name} size="lg" isEliminated={true} />
-              </div>
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.2, type: "spring" }}
-                className="text-4xl font-bold text-red-600 py-6"
-              >
-                {eliminatedPlayer.name}
-              </motion.div>
-              {isCorrectElimination && (
-                <motion.div
-                  initial={{ scale: 0, rotate: -180 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  transition={{ delay: 0.4, type: "spring" }}
-                  className="text-6xl mb-4"
-                >
-                  🎉
-                </motion.div>
-              )}
-              <div className="space-y-2">
-                <p className="text-lg">קיבל {eliminatedPlayer.votes} קולות</p>
-                {isBothMode && (
-                  <p className="text-lg font-semibold">
-                    היה: {typeText}
-                  </p>
-                )}
-                {!isBothMode && eliminationType !== 'normal' && (
-                  <p className="text-lg font-semibold">
-                    היה: {typeText}
-                  </p>
-                )}
-                <p className="text-muted-foreground">השחקן הודח מהמשחק</p>
-              </div>
-              <Button onClick={handleContinueAfterElimination} size="lg" className="mt-4">
-                המשך
-              </Button>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
-    );
-  }
   
   // Admin activation screen (online mode only) - only show if not showing results AND no eliminated player
   // Make absolutely sure isAdmin is true - double check
