@@ -559,10 +559,23 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
 
   const handleContinueAfterWrongElimination = async () => {
     game.continueAfterWrongElimination();
+    // Reset voting activation so admin needs to activate again for next round
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (game as any).state.votingActivated = false;
+    // CRITICAL: Clear voting phase state to go back to word assignment screen
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (game as any).state.votingPhase = false;
+    // Clear tie state if it exists
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (game as any).state.canRevote = false;
+    
     const newState = game.getState();
     setGameState(newState);
     setShowWrongElimination(false);
+    setShowResults(false);
+    setShowTieResults(false);
     setEliminatedPlayer(null);
+    setTiedPlayers([]);
     setSelectedTarget(null);
     setSelectedImposterTarget(null);
     setSelectedOtherWordTarget(null);
@@ -570,6 +583,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     // Sync continue after wrong elimination to server
     if (roomId && gameState.isOnline) {
       try {
+        console.log('[VotingPhase] Syncing continue after wrong elimination to server');
         await fetch('/api/rooms/game-state', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -577,11 +591,14 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             roomId,
             gameStateData: {
               currentPlayerIndex: newState.currentPlayerIndex,
-              votingPhase: newState.votingPhase,
-              votingActivated: newState.votingActivated,
+              votingPhase: false, // CRITICAL: Set to false to go back to word assignment
+              votingActivated: false, // Reset activation for next round
+              currentVotingPlayerIndex: 0, // Reset voting index
               wrongElimination: false,
-              eliminatedPlayer: undefined,
-              votes: {},
+              isTie: false, // Clear tie state
+              eliminatedPlayer: undefined, // Clear eliminated player (but keep isEliminated on player)
+              tiedPlayers: undefined, // Clear tied players
+              votes: {}, // Clear votes
               playerWords: newState.players.reduce((acc, p) => {
                 if (p.currentWord) {
                   acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
@@ -590,6 +607,13 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
             }
           })
+        });
+        
+        // Force state update after sync to ensure UI updates
+        const finalState = game.getState();
+        setGameState({
+          ...finalState,
+          players: finalState.players.map(p => ({ ...p }))
         });
       } catch (error) {
         console.error('Error syncing continue after wrong elimination:', error);
@@ -1456,6 +1480,47 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   
   // Also check component state for eliminated player
   const hasEliminatedPlayerInState = eliminatedPlayer !== null && eliminatedPlayer !== undefined;
+  
+  // CRITICAL: Check if current player is eliminated - show view-only screen
+  if (currentPlayer && currentPlayer.isEliminated) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <Card className="border-red-500 border-2">
+          <CardHeader className="text-center">
+            <CardTitle className="text-3xl text-red-600">הודחת מהמשחק</CardTitle>
+          </CardHeader>
+          <CardContent className="text-center space-y-4">
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.2, type: "spring" }}
+              className="text-4xl font-bold text-red-600 py-6"
+            >
+              {currentPlayer.name}
+            </motion.div>
+            <div className="space-y-2">
+              <p className="text-lg text-muted-foreground">הודחת מהמשחק ולא יכול להצביע</p>
+              <p className="text-muted-foreground">אתה יכול לצפות במשחק בלבד</p>
+            </div>
+            {showWrongElimination && (
+              <div className="mt-4 p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                <p className="text-orange-600 font-semibold">עדיין צריך למצוא את המתחזה/מילה דומה!</p>
+                {!isAdmin && (
+                  <p className="text-sm text-muted-foreground mt-2">ממתין למארח להתחיל הצבעה נוספת</p>
+                )}
+              </div>
+            )}
+            {showResults && !showWrongElimination && eliminatedPlayer && (
+              <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                <p className="text-green-600 font-semibold">המשחק ממשיך...</p>
+                <p className="text-sm text-muted-foreground mt-2">ממתין לשחקנים להצביע</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
   
   // Show results screens FIRST before any activation screens
   // This ensures all players see results when they're available
