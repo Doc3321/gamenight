@@ -20,9 +20,10 @@ interface VotingPhaseProps {
   isAdmin?: boolean; // Whether current player is admin (for online mode)
   roomId?: string; // For online mode - room ID for real-time sync
   currentPlayerIdString?: string; // For online mode - the string player ID
+  onReset?: () => void; // Optional reset callback for going back to menu
 }
 
-export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isAdmin = false, roomId, currentPlayerIdString }: VotingPhaseProps) {
+export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isAdmin = false, roomId, currentPlayerIdString, onReset }: VotingPhaseProps) {
   const [selectedTarget, setSelectedTarget] = useState<number | null>(null);
   const [selectedImposterTarget, setSelectedImposterTarget] = useState<number | null>(null);
   const [selectedOtherWordTarget, setSelectedOtherWordTarget] = useState<number | null>(null);
@@ -1481,6 +1482,74 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   // Also check component state for eliminated player
   const hasEliminatedPlayerInState = eliminatedPlayer !== null && eliminatedPlayer !== undefined;
   
+  // SPECTATOR MODE: If player is eliminated but game continues (wrong elimination),
+  // show them the voting phase in read-only mode BEFORE the general eliminated check
+  if (currentPlayer && currentPlayer.isEliminated && showWrongElimination && !showResults && !showTieResults) {
+    const activePlayers = currentGameStateForRender.players.filter(p => !p.isEliminated);
+    const currentVotingIndex = currentGameStateForRender.currentVotingPlayerIndex ?? 0;
+    const currentVoter = activePlayers[currentVotingIndex];
+    const allVoted = activePlayers.length > 0 && activePlayers.every(p => p.hasVoted);
+    
+    return (
+      <div className="max-w-2xl mx-auto">
+        <Card className="border-orange-500 border-2">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl text-orange-600">מצב צפייה</CardTitle>
+            <p className="text-sm text-muted-foreground mt-2">הודחת מהמשחק - המשחק ממשיך</p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+              <p className="text-orange-600 font-semibold">היית שחקן רגיל</p>
+              <p className="text-orange-600 font-semibold">עדיין צריך למצוא את המתחזה/מילה דומה!</p>
+            </div>
+            
+            {/* Show voting progress */}
+            {currentGameStateForRender.votingActivated ? (
+              <div className="space-y-3">
+                {allVoted ? (
+                  <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-center">
+                    <p className="text-blue-600 font-semibold">כל השחקנים הצביעו</p>
+                    <p className="text-sm text-muted-foreground mt-1">ממתין לתוצאות...</p>
+                  </div>
+                ) : currentVoter ? (
+                  <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg text-center">
+                    <p className="text-purple-600 font-semibold">מצביע כעת:</p>
+                    <p className="text-2xl font-bold text-purple-600 mt-2">{currentVoter.name}</p>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-gray-50 dark:bg-gray-900/20 rounded-lg text-center">
+                    <p className="text-muted-foreground">ממתין להתחלת ההצבעה...</p>
+                  </div>
+                )}
+                
+                {/* Show voting progress */}
+                <div className="p-3 bg-gray-50 dark:bg-gray-900/20 rounded-lg">
+                  <p className="text-sm font-semibold mb-2">התקדמות ההצבעה:</p>
+                  <div className="space-y-1">
+                    {activePlayers.map((player) => (
+                      <div key={player.id} className="flex justify-between items-center text-sm">
+                        <span>{player.name}:</span>
+                        <span className={player.hasVoted ? 'text-green-600' : 'text-gray-400'}>
+                          {player.hasVoted ? '✓ הצביע' : 'ממתין...'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 bg-gray-50 dark:bg-gray-900/20 rounded-lg text-center">
+                <p className="text-muted-foreground">
+                  {isAdmin ? 'לחץ על "הפעל הצבעה" כדי להתחיל' : 'ממתין למארח להתחיל הצבעה נוספת'}
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  
   // CRITICAL: Check if current player is eliminated - show view-only screen
   // DYNAMIC: Show different messages based on game state
   if (currentPlayer && currentPlayer.isEliminated) {
@@ -1508,23 +1577,99 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               <p className="text-muted-foreground">אתה יכול לצפות במשחק בלבד</p>
             </div>
             
-            {/* Game won - show winner message */}
+            {/* Game won - show winner message with word revelation */}
             {isGameWon && showResults && !showWrongElimination && (
-              <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                <p className="text-green-600 font-semibold text-lg">המשחק הסתיים!</p>
-                <p className="text-green-600 font-semibold">היית ה{winnerType} - הצליחו למצוא אותך!</p>
-                <p className="text-sm text-muted-foreground mt-2">ניצחון לשחקנים! 🎉</p>
+              <div className="mt-4 space-y-4">
+                <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                  <p className="text-green-600 font-semibold text-lg">המשחק הסתיים!</p>
+                  <p className="text-green-600 font-semibold">היית ה{winnerType} - הצליחו למצוא אותך!</p>
+                  <p className="text-sm text-muted-foreground mt-2">ניצחון לשחקנים! 🎉</p>
+                </div>
+                
+                {/* Reveal all words */}
+                <div className="p-4 bg-gray-50 dark:bg-gray-900/20 rounded-lg">
+                  <p className="font-semibold mb-3">גילוי המילים:</p>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between items-center p-2 bg-white dark:bg-gray-800 rounded">
+                      <span className="font-semibold">המילה הנכונה:</span>
+                      <span className="text-green-600 font-bold">{currentGameStateForRender.gameWord || ''}</span>
+                    </div>
+                    {currentGameStateForRender.players.map((player) => (
+                      <div key={player.id} className="flex justify-between items-center p-2 bg-white dark:bg-gray-800 rounded">
+                        <span className="font-semibold">{player.name}:</span>
+                        <span className={player.wordType === 'normal' ? 'text-blue-600' : player.wordType === 'imposter' ? 'text-red-600' : 'text-orange-600'}>
+                          {player.currentWord || 'לא קיבל מילה'}
+                          {player.wordType === 'imposter' && ' (מתחזה)'}
+                          {player.wordType === 'similar' && ' (מילה דומה)'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                <Button 
+                  onClick={() => {
+                    console.log('[VotingPhase] Eliminated player - back to menu clicked - game won');
+                    if (onReset) {
+                      onReset();
+                    } else {
+                      onVoteComplete();
+                    }
+                  }} 
+                  size="lg" 
+                  className="w-full mt-4"
+                >
+                  חזור לתפריט
+                </Button>
               </div>
             )}
             
-            {/* Wrong elimination - game continues */}
+            {/* Wrong elimination - game continues - SPECTATOR MODE */}
             {showWrongElimination && (
-              <div className="mt-4 p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                <p className="text-orange-600 font-semibold">היית שחקן רגיל</p>
-                <p className="text-orange-600 font-semibold">עדיין צריך למצוא את המתחזה/מילה דומה!</p>
-                {!isAdmin && (
-                  <p className="text-sm text-muted-foreground mt-2">ממתין למארח להתחיל הצבעה נוספת</p>
-                )}
+              <div className="mt-4 space-y-4">
+                <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                  <p className="text-orange-600 font-semibold">היית שחקן רגיל</p>
+                  <p className="text-orange-600 font-semibold">עדיין צריך למצוא את המתחזה/מילה דומה!</p>
+                  <p className="text-sm text-muted-foreground mt-2">אתה במצב צפייה - המשחק ממשיך</p>
+                </div>
+                
+                {/* Show current game state for spectators */}
+                <div className="p-4 bg-gray-50 dark:bg-gray-900/20 rounded-lg">
+                  <p className="font-semibold mb-3">מצב המשחק:</p>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between items-center p-2 bg-white dark:bg-gray-800 rounded">
+                      <span className="font-semibold">שחקנים פעילים:</span>
+                      <span className="text-blue-600">
+                        {currentGameStateForRender.players.filter(p => !p.isEliminated).length}
+                      </span>
+                    </div>
+                    {currentGameStateForRender.votingActivated && (
+                      <div className="flex justify-between items-center p-2 bg-white dark:bg-gray-800 rounded">
+                        <span className="font-semibold">הצבעה פעילה:</span>
+                        <span className="text-green-600">כן</span>
+                      </div>
+                    )}
+                    {currentGameStateForRender.currentVotingPlayerIndex !== undefined && (
+                      <div className="flex justify-between items-center p-2 bg-white dark:bg-gray-800 rounded">
+                        <span className="font-semibold">מצביע כעת:</span>
+                        <span className="text-purple-600">
+                          {(() => {
+                            const activePlayers = currentGameStateForRender.players.filter(p => !p.isEliminated);
+                            const votingIndex = currentGameStateForRender.currentVotingPlayerIndex || 0;
+                            const currentVoter = activePlayers[votingIndex];
+                            return currentVoter ? currentVoter.name : 'ממתין...';
+                          })()}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center p-2 bg-white dark:bg-gray-800 rounded">
+                      <span className="font-semibold">הצביעו:</span>
+                      <span className="text-blue-600">
+                        {currentGameStateForRender.players.filter(p => !p.isEliminated && p.hasVoted).length} / {currentGameStateForRender.players.filter(p => !p.isEliminated).length}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
             
@@ -1556,6 +1701,8 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       (game as any).state.gameCompleted = true;
       
       const winnerType = eliminatedWordType === 'imposter' ? 'מתחזה' : 'מילה דומה';
+      const gameWord = currentGameStateForRender.gameWord || '';
+      const eliminatedPlayerWord = eliminatedPlayer.currentWord || '';
       
       // Sync game completion to server
       if (roomId && gameState.isOnline) {
@@ -1617,8 +1764,41 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                   <p className="text-2xl font-bold text-green-600 mt-4">ניצחון! 🎉</p>
                   <p className="text-muted-foreground">הצלחתם למצוא את ה{winnerType}!</p>
                 </div>
+                
+                {/* Reveal all words */}
+                <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-900/20 rounded-lg">
+                  <p className="font-semibold mb-3">גילוי המילים:</p>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between items-center p-2 bg-white dark:bg-gray-800 rounded">
+                      <span className="font-semibold">המילה הנכונה:</span>
+                      <span className="text-green-600 font-bold">{gameWord}</span>
+                    </div>
+                    {currentGameStateForRender.players.map((player) => (
+                      <div key={player.id} className="flex justify-between items-center p-2 bg-white dark:bg-gray-800 rounded">
+                        <span className="font-semibold">{player.name}:</span>
+                        <span className={player.wordType === 'normal' ? 'text-blue-600' : player.wordType === 'imposter' ? 'text-red-600' : 'text-orange-600'}>
+                          {player.currentWord || 'לא קיבל מילה'}
+                          {player.wordType === 'imposter' && ' (מתחזה)'}
+                          {player.wordType === 'similar' && ' (מילה דומה)'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
                 <div className="mt-6">
-                  <Button onClick={onVoteComplete} size="lg" className="mt-4">
+                  <Button 
+                    onClick={() => {
+                      console.log('[VotingPhase] Back to menu clicked - game won');
+                      if (onReset) {
+                        onReset();
+                      } else {
+                        onVoteComplete();
+                      }
+                    }} 
+                    size="lg" 
+                    className="mt-4 w-full"
+                  >
                     חזור לתפריט
                   </Button>
                 </div>

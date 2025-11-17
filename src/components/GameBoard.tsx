@@ -409,6 +409,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
           isAdmin={isAdmin}
           roomId={roomId}
           currentPlayerIdString={currentPlayerIdString}
+          onReset={onReset}
         />
       );
     }
@@ -439,6 +440,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
               isAdmin={isAdmin}
               roomId={roomId}
               currentPlayerIdString={currentPlayerIdString}
+              onReset={onReset}
             />
           );
         } else if (viewingPlayer && !viewingPlayer.isEliminated) {
@@ -451,6 +453,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
               isAdmin={isAdmin}
               roomId={roomId}
               currentPlayerIdString={currentPlayerIdString}
+              onReset={onReset}
             />
           );
         }
@@ -466,6 +469,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
               isAdmin={isAdmin}
               roomId={roomId}
               currentPlayerIdString={currentPlayerIdString}
+              onReset={onReset}
             />
           );
         }
@@ -498,6 +502,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
             isAdmin={isAdmin}
             roomId={roomId}
             currentPlayerIdString={currentPlayerIdString}
+            onReset={onReset}
           />
         );
       } else {
@@ -556,6 +561,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
             isAdmin={isAdmin}
             roomId={roomId}
             currentPlayerIdString={currentPlayerIdString}
+            onReset={onReset}
           />
         );
       }
