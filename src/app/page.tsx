@@ -16,6 +16,7 @@ import { Player as GamePlayer } from '@/lib/gameLogic';
 import { GameRoom, Player } from '@/lib/roomManager';
 import AgentLoadingScreen from '@/components/AgentLoadingScreen';
 import { HeaderMenu } from '@/components/HeaderMenu';
+import { subscribeToRoom } from '@/lib/realtime/broadcast';
 
 type AppMode = 'local' | 'online';
 
@@ -56,6 +57,47 @@ export default function Home() {
     setIsReconnecting(false);
   }, []);
 
+  // Poll for room updates during game (to catch host transfers, etc.)
+  useEffect(() => {
+    if (appMode !== 'online' || !room || !game) return;
+    
+    let unsubscribe: (() => void) | null = null;
+    let pollInterval: NodeJS.Timeout | null = null;
+    
+    const refreshRoom = async () => {
+      try {
+        const response = await fetch(`/api/rooms?roomId=${room.id}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.room) {
+            setRoom(data.room);
+          }
+        }
+      } catch (error) {
+        console.error('Error refreshing room:', error);
+      }
+    };
+    
+    // Subscribe to broadcast events
+    try {
+      unsubscribe = subscribeToRoom(room.id, (event) => {
+        if (event.type === 'host-transferred' || event.type === 'room-updated') {
+          refreshRoom();
+        }
+      });
+    } catch (error) {
+      console.warn('[Page] Broadcast subscription failed, using polling:', error);
+    }
+    
+    // Poll every 2 seconds as fallback
+    pollInterval = setInterval(refreshRoom, 2000);
+    
+    return () => {
+      if (unsubscribe) unsubscribe();
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [appMode, room?.id, game]);
+  
   // Detect when game starts for non-admin players
   useEffect(() => {
     if (appMode === 'online' && room && !game && room.gameState === 'playing' && room.currentTopic && room.gameMode && room.gameWord && room.spinOrder) {
@@ -522,22 +564,27 @@ export default function Home() {
             game={game!} 
             onReset={resetGame} 
             isAdmin={appMode === 'online' && room ? (() => {
-              // Check if current player is the host
+              // Check if current player is the host (by user ID)
               if (room.hostId === currentPlayerId) {
                 return true;
               }
               // Check if host is eliminated and current player is first active player
-              const gameState = game!.getState();
-              const hostPlayer = gameState.players.find(p => p.id === parseInt(room.hostId));
-              if (hostPlayer?.isEliminated) {
-                const activePlayers = gameState.players.filter(p => !p.isEliminated);
-                if (activePlayers.length > 0) {
-                  const firstActivePlayer = activePlayers[0];
-                  const currentPlayer = gameState.players.find(p => {
-                    const roomPlayer = room.players.find(rp => rp.id === currentPlayerId);
-                    return roomPlayer && p.name === roomPlayer.name;
-                  });
-                  return !!(currentPlayer && currentPlayer.id === firstActivePlayer.id);
+              // Find host player in room by user ID, then find in game by name
+              const hostPlayerInRoom = room.players.find(p => p.id === room.hostId);
+              if (hostPlayerInRoom) {
+                const gameState = game!.getState();
+                const hostPlayerInGame = gameState.players.find(p => p.name === hostPlayerInRoom.name);
+                
+                if (hostPlayerInGame?.isEliminated) {
+                  const activePlayers = gameState.players.filter(p => !p.isEliminated);
+                  if (activePlayers.length > 0) {
+                    const firstActivePlayer = activePlayers[0];
+                    const currentPlayerInRoom = room.players.find(rp => rp.id === currentPlayerId);
+                    if (currentPlayerInRoom) {
+                      const currentPlayerInGame = gameState.players.find(p => p.name === currentPlayerInRoom.name);
+                      return !!(currentPlayerInGame && currentPlayerInGame.id === firstActivePlayer.id);
+                    }
+                  }
                 }
               }
               return false;

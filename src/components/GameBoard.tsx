@@ -10,6 +10,7 @@ import PlayerAvatar from './PlayerAvatar';
 import ClassifiedStamp from './ClassifiedStamp';
 import AgentSpinner from './AgentSpinner';
 import AgentScanLine from './AgentScanLine';
+import { subscribeToRoom } from '@/lib/realtime/broadcast';
 
 interface GameBoardProps {
   game: WordGame;
@@ -178,11 +179,14 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
     setGameState(game.getState());
   };
 
-  // Poll for game state updates in online mode
+  // Real-time sync for online games - broadcasts primary, polling fallback
   useEffect(() => {
     if (!gameState.isOnline || !roomId) return;
     
-    const pollInterval = setInterval(async () => {
+    let unsubscribe: (() => void) | null = null;
+    let pollInterval: NodeJS.Timeout | null = null;
+    
+    const syncGameState = async () => {
       try {
         const response = await fetch(`/api/rooms/game-state?roomId=${roomId}`);
         if (response.ok) {
@@ -329,11 +333,32 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
           }
         }
       } catch (error) {
-        console.error('Error polling game state:', error);
+        console.error('Error syncing game state:', error);
       }
-    }, 150); // Poll every 150ms for faster updates and result sync
+    };
     
-    return () => clearInterval(pollInterval);
+    // Subscribe to broadcasts for instant updates (PRIMARY mechanism)
+    try {
+      unsubscribe = subscribeToRoom(roomId, (event) => {
+        if (event.type === 'game-state-updated' || event.type === 'vote-cast' || event.type === 'room-updated') {
+          // Immediately sync when broadcast received - INSTANT updates!
+          syncGameState();
+        }
+      });
+    } catch (error) {
+      console.warn('[GameBoard] Broadcast subscription failed, using polling only:', error);
+    }
+    
+    // Poll as fallback only (every 1 second - much less frequent since broadcasts are primary)
+    pollInterval = setInterval(syncGameState, 1000);
+    
+    // Run immediately to get initial state
+    syncGameState();
+    
+    return () => {
+      if (unsubscribe) unsubscribe();
+      if (pollInterval) clearInterval(pollInterval);
+    };
   }, [gameState.isOnline, roomId, game, viewingPlayerId]);
 
   useEffect(() => {

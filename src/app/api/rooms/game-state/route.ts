@@ -53,6 +53,20 @@ export async function POST(request: NextRequest) {
     // Broadcast game state update
     await broadcastEvent(roomId, { type: 'game-state-updated', roomId });
     
+    // If votes were updated, also broadcast vote-cast event for instant updates
+    if (gameStateData.votes && Object.keys(gameStateData.votes).length > 0) {
+      // Get the latest vote (last entry in votes object)
+      const voteEntries = Object.entries(gameStateData.votes);
+      if (voteEntries.length > 0) {
+        const lastVote = voteEntries[voteEntries.length - 1][1] as { voterId: number; targetId: number };
+        await broadcastEvent(roomId, { 
+          type: 'vote-cast', 
+          roomId, 
+          voterId: lastVote.voterId.toString() 
+        });
+      }
+    }
+    
     const updatedRoom = await getRoom(roomId);
     return NextResponse.json({ room: updatedRoom });
   } catch (error) {

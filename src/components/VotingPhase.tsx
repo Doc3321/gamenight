@@ -1178,11 +1178,12 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
         }
       };
       
+      // Poll as fallback only (every 1 second - broadcasts are primary)
       const interval = setInterval(() => {
         if (!shouldStopPolling) {
           syncGameState();
         }
-      }, 100); // Poll every 100ms for faster updates during voting
+      }, 1000);
       
       // Also run immediately to catch any missed updates
       syncGameState();
@@ -1190,9 +1191,14 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       // Subscribe to broadcast events for instant updates (after syncGameState is defined)
       try {
         unsubscribe = subscribeToRoom(roomId, (event) => {
-          if (event.type === 'game-state-updated' || event.type === 'room-updated') {
+          if (event.type === 'game-state-updated' || event.type === 'room-updated' || event.type === 'host-transferred') {
             // Immediately refetch state when broadcast received
             syncGameState();
+            // If host was transferred, trigger a window refresh to update isAdmin
+            if (event.type === 'host-transferred') {
+              // Force a re-render by updating a dummy state or reloading room
+              window.dispatchEvent(new CustomEvent('host-transferred'));
+            }
           }
         });
       } catch (error) {
@@ -1499,7 +1505,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
         } catch (error) {
           console.error('Error checking voting completion:', error);
         }
-      }, 100); // Check every 100ms for faster detection of all votes and results
+      }, 200); // Check every 200ms for vote completion (broadcasts handle instant updates)
 
       return () => {
         shouldStopPolling = true;
