@@ -14,7 +14,8 @@ export type BroadcastEvent =
   | { type: 'game-started'; roomId: string }
   | { type: 'game-state-updated'; roomId: string }
   | { type: 'vote-cast'; roomId: string; voterId: string }
-  | { type: 'emote-sent'; roomId: string; playerId: string; emote: string };
+  | { type: 'emote-sent'; roomId: string; playerId: string; emote: string }
+  | { type: 'host-transferred'; roomId: string; newHostId: string };
 
 /**
  * Client-side: Subscribe to room events
