@@ -11,6 +11,7 @@ import ClassifiedStamp from './ClassifiedStamp';
 import AgentSpinner from './AgentSpinner';
 import AgentScanLine from './AgentScanLine';
 import { subscribeToRoom } from '@/lib/realtime/broadcast';
+import { usePlayerProfiles } from '@/lib/hooks/usePlayerProfiles';
 
 interface GameBoardProps {
   game: WordGame;
@@ -19,11 +20,31 @@ interface GameBoardProps {
   currentPlayerId?: number; // For online mode - the game player ID of current viewer
   roomId?: string; // For online mode - room ID for real-time sync
   currentPlayerIdString?: string; // For online mode - the string player ID
+  room?: { players: Array<{ id: string; name: string }> }; // For online mode - room data to map players to user IDs
 }
 
-export default function GameBoard({ game, onReset, isAdmin = false, currentPlayerId: viewingPlayerId, roomId, currentPlayerIdString }: GameBoardProps) {
+export default function GameBoard({ game, onReset, isAdmin = false, currentPlayerId: viewingPlayerId, roomId, currentPlayerIdString, room }: GameBoardProps) {
   const [isSpinning, setIsSpinning] = useState(false);
   const [gameState, setGameState] = useState(game.getState());
+  
+  // Map game players to user IDs for profile fetching (online mode only)
+  const playerNameToUserId = room ? new Map<string, string>() : null;
+  if (room && playerNameToUserId) {
+    room.players.forEach(rp => {
+      playerNameToUserId.set(rp.name, rp.id);
+    });
+  }
+  const userIds = room && playerNameToUserId 
+    ? gameState.players.map(p => playerNameToUserId.get(p.name) || '').filter(Boolean)
+    : [];
+  const playerProfiles = usePlayerProfiles(userIds);
+  
+  // Helper to get profile photo for a game player
+  const getPlayerProfilePhoto = (playerName: string): string | null => {
+    if (!room || !playerNameToUserId) return null;
+    const userId = playerNameToUserId.get(playerName);
+    return userId ? (playerProfiles[userId]?.profilePhotoUrl || null) : null;
+  };
   const [showResult, setShowResult] = useState(false);
   const [isFirstSpin, setIsFirstSpin] = useState(true);
   const [currentVotingPlayerIndex, setCurrentVotingPlayerIndex] = useState(0);
@@ -518,6 +539,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
               roomId={roomId}
               currentPlayerIdString={currentPlayerIdString}
               onReset={onReset}
+              room={room}
             />
           );
         } else if (viewingPlayer && !viewingPlayer.isEliminated) {
@@ -531,6 +553,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
               roomId={roomId}
               currentPlayerIdString={currentPlayerIdString}
               onReset={onReset}
+              room={room}
             />
           );
         }
@@ -547,6 +570,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
               roomId={roomId}
               currentPlayerIdString={currentPlayerIdString}
               onReset={onReset}
+              room={room}
             />
           );
         }
@@ -580,6 +604,7 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
             roomId={roomId}
             currentPlayerIdString={currentPlayerIdString}
             onReset={onReset}
+            room={room}
           />
         );
       } else {
@@ -702,7 +727,12 @@ export default function GameBoard({ game, onReset, isAdmin = false, currentPlaye
             
             {getCurrentPlayer() && (
               <div className="text-center p-4 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg flex items-center justify-center gap-3">
-                <PlayerAvatar name={getCurrentPlayer()!.name} size="md" isActive={true} />
+                <PlayerAvatar 
+                  name={getCurrentPlayer()!.name} 
+                  size="md" 
+                  isActive={true}
+                  profilePhotoUrl={getPlayerProfilePhoto(getCurrentPlayer()!.name)}
+                />
                 <div>
                   <p className="text-sm text-muted-foreground">תור של:</p>
                   <p className="text-lg font-semibold">{getCurrentPlayer()?.name}</p>

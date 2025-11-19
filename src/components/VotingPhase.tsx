@@ -13,6 +13,7 @@ import AgentBadge from './AgentBadge';
 import AgentSpinner from './AgentSpinner';
 import AgentScanLine from './AgentScanLine';
 import { subscribeToRoom } from '@/lib/realtime/broadcast';
+import { usePlayerProfiles } from '@/lib/hooks/usePlayerProfiles';
 
 interface VotingPhaseProps {
   game: WordGame;
@@ -22,13 +23,33 @@ interface VotingPhaseProps {
   roomId?: string; // For online mode - room ID for real-time sync
   currentPlayerIdString?: string; // For online mode - the string player ID
   onReset?: () => void; // Optional reset callback for going back to menu
+  room?: { players: Array<{ id: string; name: string }> }; // For online mode - room data to map players to user IDs
 }
 
-export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isAdmin = false, roomId, currentPlayerIdString, onReset }: VotingPhaseProps) {
+export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isAdmin = false, roomId, currentPlayerIdString, onReset, room }: VotingPhaseProps) {
   const [selectedTarget, setSelectedTarget] = useState<number | null>(null);
   const [selectedImposterTarget, setSelectedImposterTarget] = useState<number | null>(null);
   const [selectedOtherWordTarget, setSelectedOtherWordTarget] = useState<number | null>(null);
   const [gameState, setGameState] = useState(game.getState());
+  
+  // Map game players to user IDs for profile fetching (online mode only)
+  const playerNameToUserId = room ? new Map<string, string>() : null;
+  if (room && playerNameToUserId) {
+    room.players.forEach(rp => {
+      playerNameToUserId.set(rp.name, rp.id);
+    });
+  }
+  const userIds = room && playerNameToUserId 
+    ? gameState.players.map(p => playerNameToUserId.get(p.name) || '').filter(Boolean)
+    : [];
+  const playerProfiles = usePlayerProfiles(userIds);
+  
+  // Helper to get profile photo for a game player
+  const getPlayerProfilePhoto = (playerName: string): string | null => {
+    if (!room || !playerNameToUserId) return null;
+    const userId = playerNameToUserId.get(playerName);
+    return userId ? (playerProfiles[userId]?.profilePhotoUrl || null) : null;
+  };
   const [showResults, setShowResults] = useState(false);
   const [eliminatedPlayer, setEliminatedPlayer] = useState<Player | null>(null);
   const [tiedPlayers, setTiedPlayers] = useState<Player[]>([]);
@@ -2667,7 +2688,12 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
           {/* Current Player Info */}
           <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg text-center">
             <div className="flex items-center justify-center gap-3 mb-2 flex-wrap">
-              <PlayerAvatar name={currentPlayer?.name || ''} size="md" isActive={true} />
+              <PlayerAvatar 
+                name={currentPlayer?.name || ''} 
+                size="md" 
+                isActive={true}
+                profilePhotoUrl={currentPlayer ? getPlayerProfilePhoto(currentPlayer.name) : null}
+              />
               <div className="flex-1 min-w-0">
                 <AgentBadge 
                   agentName={currentPlayer?.name || ''} 
@@ -2715,7 +2741,12 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                             whileTap={{ scale: 0.95 }}
                             disabled={selectedOtherWordTarget === player.id}
                           >
-                            <PlayerAvatar name={player.name} size="md" isEliminated={player.isEliminated} />
+                            <PlayerAvatar 
+                              name={player.name} 
+                              size="md" 
+                              isEliminated={player.isEliminated}
+                              profilePhotoUrl={getPlayerProfilePhoto(player.name)}
+                            />
                             <div className="font-semibold">{player.name}</div>
                             {selectedOtherWordTarget === player.id && (
                               <div className="text-xs text-muted-foreground mt-1">
@@ -2767,7 +2798,12 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                             whileTap={{ scale: 0.95 }}
                             disabled={selectedImposterTarget === player.id}
                           >
-                            <PlayerAvatar name={player.name} size="md" isEliminated={player.isEliminated} />
+                            <PlayerAvatar 
+                              name={player.name} 
+                              size="md" 
+                              isEliminated={player.isEliminated}
+                              profilePhotoUrl={getPlayerProfilePhoto(player.name)}
+                            />
                             <div className="font-semibold">{player.name}</div>
                             {selectedImposterTarget === player.id && (
                               <div className="text-xs text-muted-foreground mt-1">
@@ -2828,7 +2864,12 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                       >
-                        <PlayerAvatar name={player.name} size="md" isEliminated={player.isEliminated} />
+                        <PlayerAvatar 
+                          name={player.name} 
+                          size="md" 
+                          isEliminated={player.isEliminated}
+                          profilePhotoUrl={getPlayerProfilePhoto(player.name)}
+                        />
                         <div className="font-semibold">{player.name}</div>
                         {showVoteCounts && player.votes !== undefined && player.votes > 0 && (
                           <div className="text-sm text-muted-foreground mt-1">
@@ -2925,7 +2966,11 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                       : player.hasVoted;
                     return (
                       <div key={player.id} className="flex flex-col items-center gap-1" title={player.name}>
-                        <PlayerAvatar name={player.name} size="sm" />
+                        <PlayerAvatar 
+                          name={player.name} 
+                          size="sm"
+                          profilePhotoUrl={getPlayerProfilePhoto(player.name)}
+                        />
                         <div className={`w-2 h-2 rounded-full ${
                           playerVoted ? 'bg-green-500' : 'bg-gray-300'
                         }`} />

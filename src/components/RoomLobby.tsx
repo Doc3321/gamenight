@@ -11,6 +11,7 @@ import AgentBadge from './AgentBadge';
 import ClassifiedStamp from './ClassifiedStamp';
 import AgentSpinner from './AgentSpinner';
 import { GameRoom, GameMode } from '@/lib/roomManager';
+import { usePlayerProfiles } from '@/lib/hooks/usePlayerProfiles';
 
 interface RoomLobbyProps {
   room: GameRoom;
@@ -26,6 +27,10 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
   const [isStarting, setIsStarting] = useState(false);
   const [isTogglingReady, setIsTogglingReady] = useState(false);
   const [localRoom, setLocalRoom] = useState(room);
+  
+  // Fetch profile photos for all players
+  const playerUserIds = localRoom.players.map(p => p.id);
+  const playerProfiles = usePlayerProfiles(playerUserIds);
   
   // Update local room when prop changes
   useEffect(() => {
@@ -246,7 +251,11 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
                 className="flex items-center justify-between p-3 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg border-2 border-transparent hover:border-purple-300 dark:hover:border-purple-600 transition-all"
               >
                 <div className="flex items-center gap-3 flex-1">
-                  <PlayerAvatar name={player.name} size="md" />
+                  <PlayerAvatar 
+                    name={player.name} 
+                    size="md" 
+                    profilePhotoUrl={playerProfiles[player.id]?.profilePhotoUrl || null}
+                  />
                   <div className="flex-1 min-w-0">
                     <AgentBadge 
                       agentName={player.name} 
