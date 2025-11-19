@@ -142,7 +142,7 @@ export function HeaderMenu() {
       <AnimatePresence>
         {isOpen && (
           <>
-            {/* Desktop Sidebar */}
+            {/* Desktop Sidebar - Phone Design */}
             {!isMobile && (
               <>
                 <div
@@ -154,11 +154,43 @@ export function HeaderMenu() {
                   animate={{ x: 0 }}
                   exit={{ x: '100%' }}
                   transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                  className="fixed right-0 top-0 h-full w-80 z-50 bg-gradient-to-br from-gray-900 via-purple-900/30 to-gray-900 border-l-2 border-purple-500/30 shadow-2xl overflow-y-auto"
+                  className="fixed right-0 top-0 h-full w-96 z-50 flex items-center justify-center p-4"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  <ClassifiedStamp level="TOP SECRET" />
-                  <AgentScanLine />
-                  <MenuContent />
+                  {/* Phone Frame */}
+                  <div className="relative w-full max-w-sm h-[90vh]">
+                    {/* Phone Body */}
+                    <div className="relative bg-gradient-to-br from-gray-800 via-gray-900 to-black rounded-[2.5rem] p-2 shadow-2xl border-4 border-gray-700 h-full">
+                      {/* Phone Screen Bezel */}
+                      <div className="bg-black rounded-[2rem] p-1 h-full">
+                        {/* Notch */}
+                        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-32 h-6 bg-black rounded-b-2xl z-10"></div>
+                        
+                        {/* Screen Content */}
+                        <div className="relative bg-gradient-to-br from-gray-900 via-purple-900/30 to-gray-900 rounded-[1.75rem] overflow-y-auto h-full">
+                          <ClassifiedStamp level="TOP SECRET" />
+                          <AgentScanLine />
+                          
+                          {/* Status Bar */}
+                          <div className="flex justify-between items-center px-6 pt-8 pb-2 text-white text-xs sticky top-0 bg-gradient-to-b from-gray-900 via-purple-900/30 to-transparent z-20">
+                            <span>9:41</span>
+                            <div className="flex items-center gap-1">
+                              <div className="w-4 h-2 border border-white rounded-sm">
+                                <div className="w-full h-full bg-white rounded-sm"></div>
+                              </div>
+                              <span>📶</span>
+                              <span>📶</span>
+                            </div>
+                          </div>
+
+                          <MenuContent />
+
+                          {/* Home Indicator */}
+                          <div className="sticky bottom-2 left-1/2 transform -translate-x-1/2 w-32 h-1 bg-white/30 rounded-full mx-auto mt-4"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </motion.div>
               </>
             )}
