@@ -146,12 +146,13 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     }
     
     // Prevent duplicate votes - check if player has already voted for this type
+    // Note: null means skipped, undefined means not voted yet
     if (currentPlayerBeforeVote) {
-      if (voteType === 'imposter' && currentPlayerBeforeVote.votedForImposter !== undefined) {
-        return; // Already voted for imposter
+      if (voteType === 'imposter' && (currentPlayerBeforeVote.votedForImposter !== undefined || currentPlayerBeforeVote.votedForImposter === null)) {
+        return; // Already voted or skipped for imposter
       }
-      if (voteType === 'other-word' && currentPlayerBeforeVote.votedForOtherWord !== undefined) {
-        return; // Already voted for other word
+      if (voteType === 'other-word' && (currentPlayerBeforeVote.votedForOtherWord !== undefined || currentPlayerBeforeVote.votedForOtherWord === null)) {
+        return; // Already voted or skipped for other word
       }
       if (!voteType && currentPlayerBeforeVote.hasVoted) {
         return; // Already voted
@@ -185,13 +186,15 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
           newState.players.forEach(player => {
             if (player.hasVoted || player.votedForImposter !== undefined || player.votedForOtherWord !== undefined) {
               if (newState.gameMode === 'mixed') {
-                if (player.votedForImposter !== undefined) {
+                // Only sync actual votes, not skipped (null) votes
+                if (player.votedForImposter !== undefined && player.votedForImposter !== null) {
                   votes[`${player.id}_imposter`] = { voterId: player.id, targetId: player.votedForImposter, voteType: 'imposter' };
                 }
-                if (player.votedForOtherWord !== undefined) {
+                if (player.votedForOtherWord !== undefined && player.votedForOtherWord !== null) {
                   votes[`${player.id}_other`] = { voterId: player.id, targetId: player.votedForOtherWord, voteType: 'other-word' };
                 }
-              } else if (player.votedFor !== undefined) {
+              } else if (player.votedFor !== undefined && player.votedFor !== null) {
+                // Only sync actual votes, not skipped (null) votes
                 votes[player.id.toString()] = { voterId: player.id, targetId: player.votedFor };
               }
             }
@@ -229,7 +232,8 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       const currentPlayer = newState.players.find(p => p.id === currentPlayerId);
       const isBothMode = newState.gameMode === 'mixed';
       const isComplete = isBothMode 
-        ? (currentPlayer?.votedForImposter !== undefined && currentPlayer?.votedForOtherWord !== undefined)
+        ? ((currentPlayer?.votedForImposter !== undefined || currentPlayer?.votedForImposter === null) && 
+           (currentPlayer?.votedForOtherWord !== undefined || currentPlayer?.votedForOtherWord === null))
         : currentPlayer?.hasVoted;
       
       // For online mode: increment currentVotingPlayerIndex after player completes voting
@@ -258,13 +262,15 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               updatedState.players.forEach(player => {
                 if (player.hasVoted || player.votedForImposter !== undefined || player.votedForOtherWord !== undefined) {
                   if (updatedState.gameMode === 'mixed') {
-                    if (player.votedForImposter !== undefined) {
+                    // Only sync actual votes, not skipped (null) votes
+                    if (player.votedForImposter !== undefined && player.votedForImposter !== null) {
                       votesForSync[`${player.id}_imposter`] = { voterId: player.id, targetId: player.votedForImposter, voteType: 'imposter' };
                     }
-                    if (player.votedForOtherWord !== undefined) {
+                    if (player.votedForOtherWord !== undefined && player.votedForOtherWord !== null) {
                       votesForSync[`${player.id}_other`] = { voterId: player.id, targetId: player.votedForOtherWord, voteType: 'other-word' };
                     }
-                  } else if (player.votedFor !== undefined) {
+                  } else if (player.votedFor !== undefined && player.votedFor !== null) {
+                    // Only sync actual votes, not skipped (null) votes
                     votesForSync[player.id.toString()] = { voterId: player.id, targetId: player.votedFor };
                   }
                 }
@@ -1169,8 +1175,9 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                       } else if (vote.voteType === 'other-word') {
                         voter.votedForOtherWord = vote.targetId;
                       }
-                      // Mark as voted if both votes are cast
-                      if (voter.votedForImposter !== undefined && voter.votedForOtherWord !== undefined) {
+                      // Mark as voted if both votes are cast (or skipped)
+                      if ((voter.votedForImposter !== undefined || voter.votedForImposter === null) && 
+                          (voter.votedForOtherWord !== undefined || voter.votedForOtherWord === null)) {
                         voter.hasVoted = true;
                       }
                     } else if (!vote.voteType) {
@@ -1528,7 +1535,8 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                       } else if (vote.voteType === 'other-word') {
                         voter.votedForOtherWord = vote.targetId;
                       }
-                      if (voter.votedForImposter !== undefined && voter.votedForOtherWord !== undefined) {
+                      if ((voter.votedForImposter !== undefined || voter.votedForImposter === null) && 
+                          (voter.votedForOtherWord !== undefined || voter.votedForOtherWord === null)) {
                         voter.hasVoted = true;
                       }
                     } else if (!vote.voteType) {
@@ -2355,7 +2363,9 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   // Also check if current player has already voted - if they have, don't show activation button
   const isVotingActivatedForAdmin = currentGameStateForRender.votingActivated === true || gameState.votingActivated === true;
   const currentPlayerHasVoted = currentPlayer?.hasVoted || 
-    (isBothMode && currentPlayer?.votedForImposter !== undefined && currentPlayer?.votedForOtherWord !== undefined);
+    (isBothMode && 
+      (currentPlayer?.votedForImposter !== undefined || currentPlayer?.votedForImposter === null) && 
+      (currentPlayer?.votedForOtherWord !== undefined || currentPlayer?.votedForOtherWord === null));
   const shouldShowAdminButton = gameState.isOnline && 
     !isVotingActivatedForAdmin && 
     isAdmin === true && 
@@ -2489,7 +2499,9 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   // ALSO: Don't show waiting screen if all players have voted - show results instead
   const hasVotedForDisplay = currentPlayer ? (
     currentPlayer.hasVoted || 
-    (isBothMode && currentPlayer.votedForImposter !== undefined && currentPlayer.votedForOtherWord !== undefined)
+    (isBothMode && 
+      (currentPlayer.votedForImposter !== undefined || currentPlayer.votedForImposter === null) && 
+      (currentPlayer.votedForOtherWord !== undefined || currentPlayer.votedForOtherWord === null))
   ) : false;
   
   // Check if all players have voted
@@ -2582,7 +2594,9 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             <div className="flex justify-center gap-4 mt-4">
               {activePlayersForVoting.map((player) => {
                 const playerVoted = isBothMode
-                  ? player.hasVoted && player.votedForImposter !== undefined && player.votedForOtherWord !== undefined
+                  ? player.hasVoted && 
+                    (player.votedForImposter !== undefined || player.votedForImposter === null) && 
+                    (player.votedForOtherWord !== undefined || player.votedForOtherWord === null)
                   : player.hasVoted;
                 return (
                   <div key={player.id} className="flex flex-col items-center gap-1">
@@ -2603,8 +2617,8 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   }
 
   // Check voting progress for both mode
-  const hasVotedImposter = currentPlayer?.votedForImposter !== undefined;
-  const hasVotedOtherWord = currentPlayer?.votedForOtherWord !== undefined;
+  const hasVotedImposter = currentPlayer?.votedForImposter !== undefined || currentPlayer?.votedForImposter === null;
+  const hasVotedOtherWord = currentPlayer?.votedForOtherWord !== undefined || currentPlayer?.votedForOtherWord === null;
   const bothVotesComplete = isBothMode ? (hasVotedImposter && hasVotedOtherWord) : hasVoted;
 
   return (
