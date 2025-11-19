@@ -1419,6 +1419,7 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
           
           // CRITICAL: Check for eliminated player immediately - don't wait for vote checking
           if (response.ok) {
+            // Read response body ONCE and reuse it
             const data = await response.json();
             const serverState = data.room?.gameStateData;
             
@@ -1489,11 +1490,8 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
               }
               return; // Don't check votes if we already have tie results
             }
-          }
-          
-          if (response.ok) {
-            const data = await response.json();
-            const serverState = data.room.gameStateData;
+            
+            // Continue with vote checking using the same serverState data
             
             // Note: eliminatedPlayer and isTie checks are already done above, so skip them here
             // Continue to vote checking logic below
