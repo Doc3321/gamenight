@@ -598,7 +598,7 @@ export default function Home() {
               : undefined}
             roomId={appMode === 'online' ? room?.id : undefined}
             currentPlayerIdString={appMode === 'online' ? currentPlayerId : undefined}
-            room={appMode === 'online' ? room : undefined}
+            room={appMode === 'online' && room ? { players: room.players } : undefined}
           />
         </motion.div>
       </div>

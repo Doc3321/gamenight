@@ -36,6 +36,7 @@ export function usePlayerProfiles(userIds: string[]): Record<string, PlayerProfi
     };
 
     fetchProfiles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userIds.join(',')]); // Re-fetch if userIds change
 
   return profiles;
