@@ -9,9 +9,9 @@ export interface Player {
   wordType?: 'normal' | 'similar' | 'imposter';
   votes?: number; // Number of votes received
   hasVoted?: boolean; // Whether this player has voted
-  votedFor?: number; // ID of player this player voted for (for normal voting)
-  votedForImposter?: number; // ID of player voted for as imposter (for both mode)
-  votedForOtherWord?: number; // ID of player voted for as other word (for both mode)
+  votedFor?: number | null; // ID of player this player voted for (for normal voting), null = skipped
+  votedForImposter?: number | null; // ID of player voted for as imposter (for both mode), null = skipped
+  votedForOtherWord?: number | null; // ID of player voted for as other word (for both mode), null = skipped
   isEliminated?: boolean; // Whether player is eliminated
 }
 

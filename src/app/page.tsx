@@ -96,6 +96,7 @@ export default function Home() {
       if (unsubscribe) unsubscribe();
       if (pollInterval) clearInterval(pollInterval);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appMode, room?.id, game]);
   
   // Detect when game starts for non-admin players
