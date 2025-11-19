@@ -63,7 +63,8 @@ export default function JoinRoom({ onJoinRoom, onCreateRoom }: JoinRoomProps) {
     };
 
     fetchRooms();
-    const interval = setInterval(fetchRooms, 2000); // Refresh every 2 seconds
+    // Poll every 1 second for faster room list updates
+    const interval = setInterval(fetchRooms, 1000);
 
     return () => clearInterval(interval);
   }, []);
