@@ -1498,46 +1498,82 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             // Note: eliminatedPlayer and isTie checks are already done above, so skip them here
             // Continue to vote checking logic below
             
+            // PRIMARY CHECK: Use game.allPlayersVoted() which correctly handles skipped votes
+            // This is the most reliable check since it uses local game state
+            const allVotedFromGame = game.allPlayersVoted();
+            
+            // SECONDARY CHECK: Also check server votes (but note: skipped votes aren't synced to server)
             // Only check votes if we don't already have results
-            if (serverState.votes && !serverState.eliminatedPlayer && !serverState.isTie) {
+            let allVotedFromServer = false;
+            if (serverState?.votes && !serverState.eliminatedPlayer && !serverState.isTie) {
               const serverVotes = serverState.votes;
               const currentState = game.getState();
               const activePlayers = currentState.players.filter(p => !p.isEliminated);
               const isBothMode = currentState.gameMode === 'mixed';
               
-              // Check if all players have voted based on server votes
+              // Check server votes as backup verification
               type VoteData = { voterId: number; targetId: number; voteType?: 'imposter' | 'other-word' };
               const votesArray = Object.values(serverVotes) as VoteData[];
-              let allVoted = true;
+              allVotedFromServer = true;
               for (const player of activePlayers) {
                 if (isBothMode) {
-                  // Check if both votes exist in server votes
+                  // Check if both votes exist in server votes OR player has voted locally (might have skipped)
                   const hasImposterVote = votesArray.some(v => 
                     v.voterId === player.id && v.voteType === 'imposter'
                   );
                   const hasOtherVote = votesArray.some(v => 
                     v.voterId === player.id && v.voteType === 'other-word'
                   );
-                  if (!hasImposterVote || !hasOtherVote) {
-                    allVoted = false;
+                  // If player has voted locally but vote not in server, they might have skipped
+                  const hasVotedLocally = player.hasVoted || 
+                    (player.votedForImposter !== undefined && player.votedForOtherWord !== undefined);
+                  if (!hasImposterVote && !hasOtherVote && !hasVotedLocally) {
+                    allVotedFromServer = false;
                     break;
                   }
                 } else {
-                  // Check if vote exists in server votes
+                  // Check if vote exists in server votes OR player has voted locally (might have skipped)
                   const hasVote = votesArray.some(v => 
                     v.voterId === player.id && !v.voteType
                   );
-                  if (!hasVote) {
-                    allVoted = false;
+                  const hasVotedLocally = player.hasVoted || player.votedFor !== undefined;
+                  if (!hasVote && !hasVotedLocally) {
+                    allVotedFromServer = false;
                     break;
                   }
                 }
               }
+            }
               
-              // If all voted and results not shown, sync votes to local state and calculate results
-              if (allVoted && !showResults && !showTieResults && !showWrongElimination) {
-                // Sync votes from server to local game state
+            // Use game's allPlayersVoted() as primary check (handles skipped votes correctly)
+            const allVoted = allVotedFromGame || allVotedFromServer;
+              
+            console.log('[VotingPhase] Vote completion check:', {
+              allVotedFromGame,
+              allVotedFromServer,
+              allVoted,
+              activePlayers: game.getState().players.filter(p => !p.isEliminated).map(p => ({
+                id: p.id,
+                name: p.name,
+                hasVoted: p.hasVoted,
+                votedFor: p.votedFor,
+                votedForImposter: p.votedForImposter,
+                votedForOtherWord: p.votedForOtherWord
+              })),
+              showResults,
+              showTieResults,
+              showWrongElimination
+            });
+              
+            // If all voted and results not shown, sync votes to local state and calculate results
+            if (allVoted && !showResults && !showTieResults && !showWrongElimination) {
+              console.log('[VotingPhase] All players voted detected, proceeding to calculate results');
+              
+              // Sync votes from server if available
+              if (serverState?.votes) {
+                const serverVotes = serverState.votes;
                 const currentState = game.getState();
+                const isBothMode = currentState.gameMode === 'mixed';
                 
                 // Reset vote counts only (don't reset voting data - preserve it)
                 currentState.players.forEach(p => {
@@ -1670,6 +1706,13 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                 
                 // Calculate results immediately - handleCalculateResults will recalculate votes
                 // Use a shorter timeout to make results appear faster
+                setTimeout(() => {
+                  handleCalculateResults();
+                }, 50);
+              } else {
+                // No server votes but all players voted (they might have all skipped)
+                // Still calculate results from local state
+                console.log('[VotingPhase] All players voted but no server votes (all skipped?), calculating from local state');
                 setTimeout(() => {
                   handleCalculateResults();
                 }, 50);
