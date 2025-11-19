@@ -206,13 +206,38 @@ export class WordGame {
     }
   }
 
-  public castVote(voterId: number, targetId: number, voteType?: 'imposter' | 'other-word'): boolean {
+  public castVote(voterId: number, targetId: number | null, voteType?: 'imposter' | 'other-word'): boolean {
     const voter = this.state.players.find(p => p.id === voterId);
-    const target = this.state.players.find(p => p.id === targetId);
-
+    
     // Validation
-    if (!voter || !target) return false;
-    if (voter.isEliminated || target.isEliminated) return false;
+    if (!voter) return false;
+    if (voter.isEliminated) return false;
+    
+    // Skip vote: if targetId is null, just mark as voted without voting for anyone
+    if (targetId === null) {
+      if (this.state.gameMode === 'mixed' && voteType) {
+        // In mixed mode, need to handle skip for specific vote type
+        if (voteType === 'imposter') {
+          voter.votedForImposter = null; // Mark as skipped
+        } else if (voteType === 'other-word') {
+          voter.votedForOtherWord = null; // Mark as skipped
+        }
+        // Check if both votes are done (either voted or skipped)
+        if ((voter.votedForImposter !== undefined || voter.votedForImposter === null) && 
+            (voter.votedForOtherWord !== undefined || voter.votedForOtherWord === null)) {
+          voter.hasVoted = true;
+        }
+      } else {
+        // Normal mode: skip vote
+        voter.votedFor = null; // Mark as skipped
+        voter.hasVoted = true;
+      }
+      return true;
+    }
+    
+    const target = this.state.players.find(p => p.id === targetId);
+    if (!target) return false;
+    if (target.isEliminated) return false;
     if (voterId === targetId) return false; // Can't vote for yourself
     
     // For online mode, voting must be activated
@@ -257,6 +282,11 @@ export class WordGame {
       player: p,
       votes: p.votes || 0
     })).sort((a, b) => b.votes - a.votes);
+  }
+  
+  public skipVote(voterId: number, voteType?: 'imposter' | 'other-word'): boolean {
+    // Skip vote - mark player as voted without voting for anyone
+    return this.castVote(voterId, null, voteType);
   }
 
   public allPlayersVoted(tiedPlayerIds?: number[]): boolean {
@@ -336,6 +366,24 @@ export class WordGame {
     // Check if wrong elimination (not imposter/other word)
     const wasWrong = eliminated.wordType === 'normal';
     this.state.wrongElimination = wasWrong;
+    
+    // AUTO-WIN CHECK: If imposters outnumber innocents after elimination, imposters win
+    const activePlayers = this.state.players.filter(p => !p.isEliminated);
+    const imposters = activePlayers.filter(p => p.wordType === 'imposter' || p.wordType === 'similar');
+    const innocents = activePlayers.filter(p => p.wordType === 'normal');
+    
+    console.log('[GameLogic] After elimination - Active players:', activePlayers.length, 'Imposters:', imposters.length, 'Innocents:', innocents.length);
+    
+    // Check auto-win conditions:
+    // 1. If 1 imposter game: 3 players left (1 imposter + 2 innocents) and innocent eliminated → imposters win
+    // 2. If 2 imposters game: 3 players left (2 imposters + 1 innocent) and innocent eliminated → imposters win
+    // General rule: If imposters >= innocents after elimination, imposters win
+    if (imposters.length >= innocents.length && innocents.length > 0) {
+      console.log('[GameLogic] AUTO-WIN: Imposters outnumber or equal innocents - imposters win!');
+      this.state.gameCompleted = true;
+      // Mark as imposter win (not wrong elimination)
+      this.state.wrongElimination = false;
+    }
     
     return {
       eliminated,

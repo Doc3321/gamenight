@@ -102,7 +102,24 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
   const isHost = localRoom.players.find(p => p.id === currentPlayerId)?.isHost || false;
   const currentPlayer = localRoom.players.find(p => p.id === currentPlayerId);
   const allPlayersReady = localRoom.players.every(p => p.isReady);
-  const canStart = isHost && localRoom.players.length >= 2 && selectedTopic && allPlayersReady;
+  
+  // Minimum players validation based on game mode
+  const getMinPlayers = (mode: GameMode): number => {
+    switch (mode) {
+      case 'imposter':
+        return 3; // 1 imposter + at least 2 innocents
+      case 'mixed':
+        return 5; // 1 similar + 1 imposter + at least 3 innocents
+      case 'similar-word':
+        return 2; // 1 similar + at least 1 normal
+      default:
+        return 2;
+    }
+  };
+  
+  const minPlayers = getMinPlayers(selectedGameMode);
+  const hasEnoughPlayers = localRoom.players.length >= minPlayers;
+  const canStart = isHost && hasEnoughPlayers && selectedTopic && allPlayersReady;
 
   const copyRoomId = () => {
     navigator.clipboard.writeText(localRoom.id);
@@ -341,9 +358,13 @@ export default function RoomLobby({ room, currentPlayerId, onStartGame, onLeaveR
               {isStarting ? 'מתחיל...' : 'התחל משחק'}
             </Button>
             
-            {localRoom.players.length < 2 && (
-              <p className="text-sm text-muted-foreground text-center">
-                צריך לפחות 2 שחקנים כדי להתחיל
+            {!hasEnoughPlayers && (
+              <p className="text-sm text-orange-600 mt-2 text-center">
+                {selectedGameMode === 'imposter' 
+                  ? 'נדרשים לפחות 3 שחקנים למשחק מתחזה (1 מתחזה + 2 רגילים)'
+                  : selectedGameMode === 'mixed'
+                  ? 'נדרשים לפחות 5 שחקנים למשחק מעורב (1 מילה דומה + 1 מתחזה + 3 רגילים)'
+                  : 'נדרשים לפחות 2 שחקנים'}
               </p>
             )}
             

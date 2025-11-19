@@ -24,6 +24,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Only the host can start the game' }, { status: 403 });
     }
 
+    // Validate minimum players based on game mode
+    const getMinPlayers = (mode: string): number => {
+      switch (mode) {
+        case 'imposter':
+          return 3; // 1 imposter + at least 2 innocents
+        case 'mixed':
+          return 5; // 1 similar + 1 imposter + at least 3 innocents
+        case 'similar-word':
+          return 2; // 1 similar + at least 1 normal
+        default:
+          return 2;
+      }
+    };
+
+    const minPlayers = getMinPlayers(gameMode);
+    if (room.players.length < minPlayers) {
+      const errorMsg = gameMode === 'imposter'
+        ? 'נדרשים לפחות 3 שחקנים למשחק מתחזה (1 מתחזה + 2 רגילים)'
+        : gameMode === 'mixed'
+        ? 'נדרשים לפחות 5 שחקנים למשחק מעורב (1 מילה דומה + 1 מתחזה + 3 רגילים)'
+        : 'נדרשים לפחות 2 שחקנים';
+      return NextResponse.json({ error: errorMsg }, { status: 400 });
+    }
+
     const startedRoom = await startGame(roomId, topic, gameMode);
     
     if (!startedRoom) {

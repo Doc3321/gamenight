@@ -445,7 +445,22 @@ export async function startGame(
   const normalizedRoomId = roomId.toUpperCase().trim();
   const room = await getRoom(normalizedRoomId);
 
-  if (!room || room.gameState !== 'waiting' || room.players.length < 2) {
+  // Validate minimum players based on game mode
+  const getMinPlayers = (mode: GameMode): number => {
+    switch (mode) {
+      case 'imposter':
+        return 3; // 1 imposter + at least 2 innocents
+      case 'mixed':
+        return 5; // 1 similar + 1 imposter + at least 3 innocents
+      case 'similar-word':
+        return 2; // 1 similar + at least 1 normal
+      default:
+        return 2;
+    }
+  };
+
+  const minPlayers = getMinPlayers(gameMode);
+  if (!room || room.gameState !== 'waiting' || room.players.length < minPlayers) {
     return null;
   }
 

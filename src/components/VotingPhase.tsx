@@ -39,10 +39,67 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
   const [isContinuing, setIsContinuing] = useState(false);
   const [isVotingLock, setIsVotingLock] = useState(false); // Prevent race conditions
 
-  const handleVote = async (voteType?: 'imposter' | 'other-word') => {
+  const handleVote = async (voteType?: 'imposter' | 'other-word', skip: boolean = false) => {
     // Prevent multiple simultaneous votes (race condition fix)
     if (isVotingLock) {
       console.warn('[VotingPhase] Vote already in progress, ignoring duplicate call');
+      return;
+    }
+    
+    // Skip vote - no target needed
+    if (skip) {
+      setIsVotingLock(true);
+      try {
+        const success = game.skipVote(currentPlayerId, voteType);
+        if (!success) {
+          console.warn('[VotingPhase] Skip vote was rejected by game logic');
+          return;
+        }
+        
+        const newState = game.getState();
+        setGameState(newState);
+        
+        // Sync skip vote to server
+        if (roomId && gameState.isOnline) {
+          try {
+            await fetch('/api/rooms/game-state', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                roomId,
+                gameStateData: {
+                  currentPlayerIndex: newState.currentPlayerIndex,
+                  votingPhase: newState.votingPhase,
+                  votingActivated: newState.votingActivated,
+                  currentVotingPlayerIndex: newState.currentVotingPlayerIndex,
+                  votes: newState.players.reduce((acc, p) => {
+                    if (p.votedFor !== undefined || p.votedFor === null) {
+                      acc[`${p.id}_normal`] = { voterId: p.id, targetId: p.votedFor || -1, voteType: undefined };
+                    }
+                    if (p.votedForImposter !== undefined || p.votedForImposter === null) {
+                      acc[`${p.id}_imposter`] = { voterId: p.id, targetId: p.votedForImposter || -1, voteType: 'imposter' as const };
+                    }
+                    if (p.votedForOtherWord !== undefined || p.votedForOtherWord === null) {
+                      acc[`${p.id}_other`] = { voterId: p.id, targetId: p.votedForOtherWord || -1, voteType: 'other-word' as const };
+                    }
+                    return acc;
+                  }, {} as Record<string, { voterId: number; targetId: number; voteType?: 'imposter' | 'other-word' }>),
+                  playerWords: newState.players.reduce((acc, p) => {
+                    if (p.currentWord) {
+                      acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
+                    }
+                    return acc;
+                  }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
+                }
+              })
+            });
+          } catch (error) {
+            console.error('Error syncing skip vote:', error);
+          }
+        }
+      } finally {
+        setIsVotingLock(false);
+      }
       return;
     }
     
@@ -335,25 +392,27 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
       p.votes = 0;
     });
     
-    // Recalculate votes from player voting data
+    // Recalculate votes from player voting data (ignore skipped votes - null values)
     stateBeforeCalc.players.forEach(voter => {
       if (!voter.isEliminated) {
         if (stateBeforeCalc.gameMode === 'mixed') {
-          if (voter.votedForImposter !== undefined) {
+          // Only count actual votes, not skipped (null) votes
+          if (voter.votedForImposter !== undefined && voter.votedForImposter !== null) {
             const target = stateBeforeCalc.players.find(p => p.id === voter.votedForImposter);
             if (target && !target.isEliminated) {
               if (target.votes === undefined) target.votes = 0;
               target.votes++;
             }
           }
-          if (voter.votedForOtherWord !== undefined) {
+          if (voter.votedForOtherWord !== undefined && voter.votedForOtherWord !== null) {
             const target = stateBeforeCalc.players.find(p => p.id === voter.votedForOtherWord);
             if (target && !target.isEliminated) {
               if (target.votes === undefined) target.votes = 0;
               target.votes++;
             }
           }
-        } else if (voter.votedFor !== undefined) {
+        } else if (voter.votedFor !== undefined && voter.votedFor !== null) {
+          // Only count actual votes, not skipped (null) votes
           const target = stateBeforeCalc.players.find(p => p.id === voter.votedFor);
           if (target && !target.isEliminated) {
             if (target.votes === undefined) target.votes = 0;
@@ -393,6 +452,52 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
     const result = game.calculateVotingResult();
     const newState = game.getState();
     setGameState(newState);
+    
+    // Check for auto-win (imposters win) - must check BEFORE other result checks
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((game as any).state.gameCompleted && result.eliminated) {
+      // Imposters won automatically - show imposter win screen
+      console.log('[VotingPhase] Auto-win detected - imposters won!');
+      setShowResults(true);
+      setEliminatedPlayer(result.eliminated);
+      setShowWrongElimination(false);
+      setShowTieResults(false);
+      
+      // Sync auto-win to server
+      if (roomId && gameState.isOnline) {
+        try {
+          await fetch('/api/rooms/game-state', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              roomId,
+              gameStateData: {
+                currentPlayerIndex: newState.currentPlayerIndex,
+                votingPhase: newState.votingPhase,
+                votingActivated: newState.votingActivated,
+                eliminatedPlayer: {
+                  id: result.eliminated.id,
+                  name: result.eliminated.name,
+                  wordType: result.eliminated.wordType,
+                  votes: result.eliminated.votes || 0
+                },
+                wrongElimination: false,
+                isTie: false,
+                playerWords: newState.players.reduce((acc, p) => {
+                  if (p.currentWord) {
+                    acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
+                  }
+                  return acc;
+                }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
+              }
+            })
+          });
+        } catch (error) {
+          console.error('Error syncing auto-win:', error);
+        }
+      }
+      return; // Don't process further - auto-win screen will show
+    }
     
     if (result.isTie) {
       // Show tie results - just option to revote
@@ -2606,14 +2711,25 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                           </motion.button>
                         ))}
                       </div>
-                      <Button
-                        onClick={() => handleVote('imposter')}
-                        disabled={!selectedImposterTarget || selectedOtherWordTarget === selectedImposterTarget || !canVote}
-                        className="w-full"
-                        size="lg"
-                      >
-                        הצבע למתחזה
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => handleVote('imposter')}
+                          disabled={!selectedImposterTarget || selectedOtherWordTarget === selectedImposterTarget || !canVote}
+                          className="flex-1"
+                          size="lg"
+                        >
+                          הצבע למתחזה
+                        </Button>
+                        <Button
+                          onClick={() => handleVote('imposter', true)}
+                          disabled={!canVote}
+                          variant="outline"
+                          className="flex-1"
+                          size="lg"
+                        >
+                          דלג
+                        </Button>
+                      </div>
                     </div>
                   )}
 
@@ -2647,14 +2763,25 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                           </motion.button>
                         ))}
                       </div>
-                      <Button
-                        onClick={() => handleVote('other-word')}
-                        disabled={!selectedOtherWordTarget || selectedImposterTarget === selectedOtherWordTarget || !canVote}
-                        className="w-full"
-                        size="lg"
-                      >
-                        הצבע למילה דומה
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => handleVote('other-word')}
+                          disabled={!selectedOtherWordTarget || selectedImposterTarget === selectedOtherWordTarget || !canVote}
+                          className="flex-1"
+                          size="lg"
+                        >
+                          הצבע למילה דומה
+                        </Button>
+                        <Button
+                          onClick={() => handleVote('other-word', true)}
+                          disabled={!canVote}
+                          variant="outline"
+                          className="flex-1"
+                          size="lg"
+                        >
+                          דלג
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -2698,25 +2825,36 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
                     ))}
                   </div>
               
-                  <Button
-                    onClick={() => {
-                      console.log('[VotingPhase] Vote button clicked:', {
-                        selectedTarget,
-                        canVote,
-                        hasVoted,
-                        isVotingActivatedForVote,
-                        isMyTurnToVote,
-                        currentVotingIndex,
-                        currentPlayerId
-                      });
-                      handleVote();
-                    }}
-                    disabled={!selectedTarget || !canVote}
-                    className="w-full mt-4"
-                    size="lg"
-                  >
-                    הצבע
-                  </Button>
+                  <div className="flex gap-2 mt-4">
+                    <Button
+                      onClick={() => {
+                        console.log('[VotingPhase] Vote button clicked:', {
+                          selectedTarget,
+                          canVote,
+                          hasVoted,
+                          isVotingActivatedForVote,
+                          isMyTurnToVote,
+                          currentVotingIndex,
+                          currentPlayerId
+                        });
+                        handleVote();
+                      }}
+                      disabled={!selectedTarget || !canVote}
+                      className="flex-1"
+                      size="lg"
+                    >
+                      הצבע
+                    </Button>
+                    <Button
+                      onClick={() => handleVote(undefined, true)}
+                      disabled={!canVote}
+                      variant="outline"
+                      className="flex-1"
+                      size="lg"
+                    >
+                      דלג
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <div className="text-center p-6 text-muted-foreground">
