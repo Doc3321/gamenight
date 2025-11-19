@@ -6,6 +6,7 @@ import { useUser, useClerk } from '@clerk/nextjs';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import SecurityPhone from '@/components/SecurityPhone';
 
 export function HeaderMenu() {
   const [isOpen, setIsOpen] = useState(false);
@@ -92,9 +93,21 @@ export function HeaderMenu() {
                 </Button>
               )}
 
-              <div className="pt-2 border-t border-purple-200 dark:border-purple-800 flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">ערכת נושא</span>
-                <ThemeToggle />
+              <div className="pt-2 border-t border-purple-200 dark:border-purple-800">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm text-muted-foreground">ערכת נושא</span>
+                  <ThemeToggle />
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">טלפון אבטחה</span>
+                  <SecurityPhone 
+                    onAction={(action) => {
+                      console.log('Security phone action:', action);
+                      setIsOpen(false);
+                    }} 
+                  />
+                </div>
               </div>
 
               {user && (
