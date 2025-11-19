@@ -215,11 +215,24 @@ export async function getOpenRooms(): Promise<GameRoom[]> {
 
   const roomsWithPlayers = await Promise.all(
     rooms.map(async (room) => {
-      const { data: players } = await supabaseAdmin
+      const { data: players, error: playersError } = await supabaseAdmin
         .from('room_players')
         .select('*')
         .eq('room_id', room.id)
         .order('created_at', { ascending: true });
+
+      if (playersError) {
+        console.error('[DB] Error fetching players for room:', room.id, playersError);
+        // If we can't fetch players, delete the room
+        try {
+          await supabaseAdmin.from('rooms').delete().eq('id', room.id);
+          await supabaseAdmin.from('room_players').delete().eq('room_id', room.id);
+          await supabaseAdmin.from('game_states').delete().eq('room_id', room.id);
+        } catch (deleteError) {
+          console.error('[DB] Error deleting room after player fetch error:', deleteError);
+        }
+        return null;
+      }
 
       const gameRoom = dbRoomToGameRoom(room, players || []);
       
@@ -232,6 +245,42 @@ export async function getOpenRooms(): Promise<GameRoom[]> {
           await supabaseAdmin.from('game_states').delete().eq('room_id', room.id);
         } catch (deleteError) {
           console.error('[DB] Error deleting empty room:', deleteError);
+        }
+        return null;
+      }
+
+      // Verify room host still exists in players list
+      const hostExists = gameRoom.players.some(p => p.id === room.host_id);
+      if (!hostExists) {
+        console.log('[DB] Room host not found in players, deleting orphaned room:', room.id, {
+          hostId: room.host_id,
+          playerIds: gameRoom.players.map(p => p.id)
+        });
+        try {
+          await supabaseAdmin.from('rooms').delete().eq('id', room.id);
+          await supabaseAdmin.from('room_players').delete().eq('room_id', room.id);
+          await supabaseAdmin.from('game_states').delete().eq('room_id', room.id);
+        } catch (deleteError) {
+          console.error('[DB] Error deleting orphaned room:', deleteError);
+        }
+        return null;
+      }
+
+      // Check if room is older than 1 hour and has fewer players than expected
+      // This helps clean up stale rooms where players left without proper cleanup
+      const roomAge = Date.now() - new Date(room.created_at).getTime();
+      const oneHour = 60 * 60 * 1000;
+      if (roomAge > oneHour && gameRoom.players.length < 2) {
+        console.log('[DB] Found stale room (old and few players), deleting:', room.id, {
+          age: Math.round(roomAge / 1000 / 60),
+          players: gameRoom.players.length
+        });
+        try {
+          await supabaseAdmin.from('rooms').delete().eq('id', room.id);
+          await supabaseAdmin.from('room_players').delete().eq('room_id', room.id);
+          await supabaseAdmin.from('game_states').delete().eq('room_id', room.id);
+        } catch (deleteError) {
+          console.error('[DB] Error deleting stale room:', deleteError);
         }
         return null;
       }

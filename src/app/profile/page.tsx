@@ -65,9 +65,10 @@ export default function ProfilePage() {
       return;
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('גודל הקובץ גדול מדי. מקסימום 5MB');
+    // Validate file size (max 2MB for base64 storage)
+    const maxSize = 2 * 1024 * 1024; // 2MB
+    if (file.size > maxSize) {
+      toast.error('גודל הקובץ גדול מדי. מקסימום 2MB');
       return;
     }
 
@@ -85,7 +86,26 @@ export default function ProfilePage() {
 
       if (response.ok && data.photoUrl) {
         setProfilePhotoUrl(data.photoUrl);
-        toast.success('תמונת הפרופיל עודכנה בהצלחה');
+        // Auto-save the photo immediately after upload
+        try {
+          const saveResponse = await fetch('/api/profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              nickname: nickname.trim() || user?.firstName || user?.username || '',
+              profilePhotoUrl: data.photoUrl,
+            }),
+          });
+
+          if (saveResponse.ok) {
+            toast.success('תמונת הפרופיל עודכנה ונשמרה בהצלחה');
+          } else {
+            toast.success('תמונת הפרופיל עודכנה (נא לשמור את הפרופיל)');
+          }
+        } catch (saveError) {
+          console.error('Error auto-saving photo:', saveError);
+          toast.success('תמונת הפרופיל עודכנה (נא לשמור את הפרופיל)');
+        }
       } else {
         throw new Error(data.error || 'Failed to upload');
       }
@@ -94,6 +114,10 @@ export default function ProfilePage() {
       toast.error('שגיאה בהעלאת התמונה');
     } finally {
       setIsUploading(false);
+      // Reset file input to allow selecting the same file again
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -194,7 +218,6 @@ export default function ProfilePage() {
                   ref={fileInputRef}
                   type="file"
                   accept="image/*"
-                  capture="environment"
                   className="hidden"
                   onChange={handleFileChange}
                 />
