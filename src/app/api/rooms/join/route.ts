@@ -35,9 +35,6 @@ export async function POST(request: NextRequest) {
       if (existingRoom.gameState !== 'waiting') {
         return NextResponse.json({ error: 'המשחק כבר התחיל. לא ניתן להצטרף.' }, { status: 400 });
       }
-      if (existingRoom.players.length >= 8) {
-        return NextResponse.json({ error: 'החדר מלא. מקסימום 8 שחקנים.' }, { status: 400 });
-      }
       const normalizedName = playerName.trim().toLowerCase();
       if (existingRoom.players.some(p => p.name.trim().toLowerCase() === normalizedName)) {
         return NextResponse.json({ error: 'שם זה כבר תפוס בחדר. בחר שם אחר.' }, { status: 400 });

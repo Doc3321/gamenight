@@ -325,11 +325,6 @@ export async function joinRoom(
     return room;
   }
 
-  // Check if room is full
-  if (room.players.length >= 8) {
-    return null;
-  }
-
   // Check for duplicate name
   const normalizedName = playerName.trim().toLowerCase();
   if (room.players.some(p => p.name.trim().toLowerCase() === normalizedName)) {

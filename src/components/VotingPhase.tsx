@@ -559,9 +559,10 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               roomId,
-              gameStateData: {
+                gameStateData: {
+                gameCompleted: true, // CRITICAL: Sync gameCompleted flag
                 currentPlayerIndex: newState.currentPlayerIndex,
-                votingPhase: newState.votingPhase,
+                votingPhase: true, // Keep in voting phase to show results
                 votingActivated: newState.votingActivated,
                 eliminatedPlayer: {
                   id: result.eliminated.id,
@@ -832,13 +833,57 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
         }
       }
       
+      // Check for auto-win BEFORE continuing
+      const currentStateBeforeContinue = game.getState();
+      const activePlayersBefore = currentStateBeforeContinue.players.filter(p => !p.isEliminated);
+      const impostersBefore = activePlayersBefore.filter(p => p.wordType === 'imposter' || p.wordType === 'similar');
+      const innocentsBefore = activePlayersBefore.filter(p => p.wordType === 'normal');
+      
+      // If auto-win condition is met, don't continue - show game end instead
+      if (impostersBefore.length >= innocentsBefore.length && innocentsBefore.length > 0) {
+        console.log('[VotingPhase] Auto-win detected, completing game instead of continuing');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (game as any).state.gameCompleted = true;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (game as any).state.wrongElimination = false;
+        const finalState = game.getState();
+        setGameState(finalState);
+        setShowWrongElimination(false);
+        setShowResults(false);
+        setShowTieResults(false);
+        
+        // Sync game completed to server
+        if (roomId && gameState.isOnline) {
+          try {
+            await fetch('/api/rooms/game-state', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                roomId,
+                gameStateData: {
+                  gameCompleted: true,
+                  wrongElimination: false,
+                  eliminatedPlayer: null,
+                  votingPhase: true
+                }
+              })
+            });
+          } catch (error) {
+            console.error('Error syncing game completed:', error);
+          }
+        }
+        
+        setIsContinuing(false);
+        return;
+      }
+      
       game.continueAfterWrongElimination();
+      // Keep voting phase true for new voting round
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (game as any).state.votingPhase = true;
       // Reset voting activation so admin needs to activate again for next round
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (game as any).state.votingActivated = false;
-      // CRITICAL: Clear voting phase state to go back to word assignment screen
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (game as any).state.votingPhase = false;
       // Clear tie state if it exists
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (game as any).state.canRevote = false;
@@ -861,26 +906,26 @@ export default function VotingPhase({ game, currentPlayerId, onVoteComplete, isA
           const response = await fetch('/api/rooms/game-state', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              roomId,
-              gameStateData: {
-                currentPlayerIndex: newState.currentPlayerIndex,
-                votingPhase: false, // CRITICAL: Set to false to go back to word assignment
-                votingActivated: false, // Reset activation for next round
-                currentVotingPlayerIndex: 0, // Reset voting index
-                wrongElimination: false,
-                isTie: false, // Clear tie state
-                eliminatedPlayer: null, // Clear eliminated player (but keep isEliminated on player)
-                tiedPlayers: null, // Clear tied players
-                votes: {}, // Clear votes
-                playerWords: newState.players.reduce((acc, p) => {
-                  if (p.currentWord) {
-                    acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
-                  }
-                  return acc;
-                }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
-              }
-            })
+              body: JSON.stringify({
+                roomId,
+                gameStateData: {
+                  currentPlayerIndex: newState.currentPlayerIndex,
+                  votingPhase: true, // Keep voting phase true for new voting round
+                  votingActivated: false, // Reset activation for next round
+                  currentVotingPlayerIndex: 0, // Reset voting index
+                  wrongElimination: false,
+                  isTie: false, // Clear tie state
+                  eliminatedPlayer: null, // Clear eliminated player (but keep isEliminated on player)
+                  tiedPlayers: null, // Clear tied players
+                  votes: {}, // Clear votes
+                  playerWords: newState.players.reduce((acc, p) => {
+                    if (p.currentWord) {
+                      acc[p.id.toString()] = { word: p.currentWord, type: p.wordType || 'normal' };
+                    }
+                    return acc;
+                  }, {} as Record<string, { word: string; type: 'normal' | 'similar' | 'imposter' }>)
+                }
+              })
           });
           
           if (response.ok) {

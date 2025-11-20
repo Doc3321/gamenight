@@ -360,28 +360,39 @@ export class WordGame {
     // Single winner (most votes = eliminated)
     const eliminated = tiedPlayers[0];
     console.log('[GameLogic] SINGLE ELIMINATION -', eliminated.name, 'with', maxVotes, 'votes');
+    
+    // Check if wrong elimination (not imposter/other word) BEFORE marking as eliminated
+    const wasWrong = eliminated.wordType === 'normal';
+    
+    // Mark as eliminated
     eliminated.isEliminated = true;
     this.state.eliminatedPlayer = eliminated;
-    
-    // Check if wrong elimination (not imposter/other word)
-    const wasWrong = eliminated.wordType === 'normal';
     this.state.wrongElimination = wasWrong;
     
     // AUTO-WIN CHECK: If imposters outnumber innocents after elimination, imposters win
+    // Check AFTER marking player as eliminated
     const activePlayers = this.state.players.filter(p => !p.isEliminated);
     const imposters = activePlayers.filter(p => p.wordType === 'imposter' || p.wordType === 'similar');
     const innocents = activePlayers.filter(p => p.wordType === 'normal');
     
     console.log('[GameLogic] After elimination - Active players:', activePlayers.length, 'Imposters:', imposters.length, 'Innocents:', innocents.length);
+    console.log('[GameLogic] Active player details:', activePlayers.map(p => ({ name: p.name, wordType: p.wordType })));
     
     // Check auto-win conditions:
     // 1. If 1 imposter game: 3 players left (1 imposter + 2 innocents) and innocent eliminated → imposters win
     // 2. If 2 imposters game: 3 players left (2 imposters + 1 innocent) and innocent eliminated → imposters win
-    // General rule: If imposters >= innocents after elimination, imposters win
-    if (imposters.length >= innocents.length && innocents.length > 0) {
-      console.log('[GameLogic] AUTO-WIN: Imposters outnumber or equal innocents - imposters win!');
+    // General rule: If imposters >= innocents after elimination AND an innocent was eliminated, imposters win
+    // CRITICAL: Only trigger auto-win if an innocent was eliminated (wasWrong = true)
+    if (wasWrong && imposters.length >= innocents.length) {
+      console.log('[GameLogic] AUTO-WIN: Imposters outnumber or equal innocents after innocent elimination - imposters win!');
+      console.log('[GameLogic] Auto-win details:', {
+        imposters: imposters.length,
+        innocents: innocents.length,
+        activePlayers: activePlayers.length,
+        wasWrong
+      });
       this.state.gameCompleted = true;
-      // Mark as imposter win (not wrong elimination)
+      // Mark as imposter win (not wrong elimination for display purposes)
       this.state.wrongElimination = false;
     }
     

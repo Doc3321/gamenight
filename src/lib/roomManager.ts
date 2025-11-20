@@ -97,11 +97,6 @@ export class RoomManager {
       return room;
     }
 
-    // Check room capacity
-    if (room.players.length >= maxPlayers) {
-      return null;
-    }
-
     // Check for duplicate names (case-insensitive)
     const normalizedName = playerName.trim().toLowerCase();
     if (room.players.some(p => p.name.trim().toLowerCase() === normalizedName)) {
